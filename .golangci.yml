@@ -24,6 +24,8 @@ linters-settings:
     check-type-assertions: true
   govet:
     enable-all: true
+    disable:
+      - fieldalignment
   revive:
     rules:
       - name: exported
