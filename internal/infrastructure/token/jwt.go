@@ -10,59 +10,102 @@ import (
 	"Lullify_Backend/internal/domain/user"
 )
 
+var ErrInvalidToken = errors.New("invalid token")
+
+const (
+	typeAccess  = "access"
+	typeRefresh = "refresh"
+)
+
+// Claims transporte l'identité vérifiée extraite d'un token.
+type Claims struct {
+	UserID uuid.UUID
+	Role   user.Role
+}
+
 type JWTService struct {
-	secret        []byte
+	accessSecret  []byte
+	refreshSecret []byte
 	accessExpiry  time.Duration
 	refreshExpiry time.Duration
 }
 
-func NewJWTService(secret string, access, refresh time.Duration) *JWTService {
+func NewJWTService(accessSecret, refreshSecret string, access, refresh time.Duration) *JWTService {
 	return &JWTService{
-		secret:        []byte(secret),
+		accessSecret:  []byte(accessSecret),
+		refreshSecret: []byte(refreshSecret),
 		accessExpiry:  access,
 		refreshExpiry: refresh,
 	}
 }
 
 func (s *JWTService) GenerateTokens(u *user.User) (string, string, error) {
-	access, err := s.sign(u.ID, string(u.Role), s.accessExpiry)
+	access, err := s.sign(u.ID, string(u.Role), typeAccess, s.accessExpiry, s.accessSecret)
 	if err != nil {
 		return "", "", err
 	}
-	refresh, err := s.sign(u.ID, string(u.Role), s.refreshExpiry)
+	refresh, err := s.sign(u.ID, string(u.Role), typeRefresh, s.refreshExpiry, s.refreshSecret)
 	if err != nil {
 		return "", "", err
 	}
 	return access, refresh, nil
 }
 
-func (s *JWTService) ParseRefresh(refresh string) (uuid.UUID, error) {
-	token, err := jwt.Parse(refresh, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return s.secret, nil
-	})
-	if err != nil || !token.Valid {
-		return uuid.Nil, errors.New("invalid token")
-	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
-		return uuid.Nil, errors.New("invalid claims")
-	}
-	sub, ok := claims["sub"].(string)
-	if !ok {
-		return uuid.Nil, errors.New("invalid subject")
-	}
-	return uuid.Parse(sub)
+// ParseAccess valide un access token et retourne l'identité qu'il porte.
+func (s *JWTService) ParseAccess(raw string) (*Claims, error) {
+	return s.parse(raw, typeAccess, s.accessSecret)
 }
 
-func (s *JWTService) sign(userID uuid.UUID, role string, expiry time.Duration) (string, error) {
+// ParseRefresh valide un refresh token et retourne l'identité qu'il porte.
+func (s *JWTService) ParseRefresh(raw string) (*Claims, error) {
+	return s.parse(raw, typeRefresh, s.refreshSecret)
+}
+
+func (s *JWTService) parse(raw, expectedType string, secret []byte) (*Claims, error) {
+	token, err := jwt.Parse(raw, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, ErrInvalidToken
+		}
+		return secret, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
+	if err != nil || !token.Valid {
+		return nil, ErrInvalidToken
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, ErrInvalidToken
+	}
+
+	if typ, _ := claims["typ"].(string); typ != expectedType {
+		return nil, ErrInvalidToken
+	}
+
+	sub, ok := claims["sub"].(string)
+	if !ok {
+		return nil, ErrInvalidToken
+	}
+	id, err := uuid.Parse(sub)
+	if err != nil {
+		return nil, ErrInvalidToken
+	}
+
+	role, ok := claims["role"].(string)
+	if !ok {
+		return nil, ErrInvalidToken
+	}
+
+	return &Claims{UserID: id, Role: user.Role(role)}, nil
+}
+
+func (s *JWTService) sign(userID uuid.UUID, role, typ string, expiry time.Duration, secret []byte) (string, error) {
+	now := time.Now()
 	claims := jwt.MapClaims{
 		"sub":  userID.String(),
 		"role": role,
-		"exp":  time.Now().Add(expiry).Unix(),
+		"typ":  typ,
+		"iat":  now.Unix(),
+		"exp":  now.Add(expiry).Unix(),
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(s.secret)
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(secret)
 }

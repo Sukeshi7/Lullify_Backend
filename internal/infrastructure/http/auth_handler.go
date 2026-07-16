@@ -74,12 +74,12 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	userID, err := h.tokens.ParseRefresh(body.RefreshToken)
+	claims, err := h.tokens.ParseRefresh(body.RefreshToken)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "invalid refresh token")
 		return
 	}
-	u, err := h.users.FindByID(r.Context(), userID)
+	u, err := h.users.FindByID(r.Context(), claims.UserID)
 	if err != nil || u == nil {
 		writeError(w, http.StatusUnauthorized, "user not found")
 		return

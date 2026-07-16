@@ -24,8 +24,7 @@ func main() {
 	defer pool.Close()
 
 	userRepo := postgres.NewUserRepository(pool)
-	jwtService := token.NewJWTService(cfg.JWTSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
-
+	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 	registerUC := appuser.NewRegisterUseCase(userRepo)
 	loginUC := appuser.NewLoginUseCase(userRepo)
 
