@@ -10,7 +10,8 @@ type Config struct {
 	Env              string
 	DatabaseURL      string
 	RedisURL         string
-	JWTSecret        string
+	JWTAccessSecret  string
+	JWTRefreshSecret string
 	JWTAccessExpiry  time.Duration
 	JWTRefreshExpiry time.Duration
 	OTELEndpoint     string
@@ -25,7 +26,8 @@ func Load() *Config {
 		Env:              getEnv("ENV", "development"),
 		DatabaseURL:      getEnv("DATABASE_URL", "postgres://lullify:password@localhost:5432/lullify?sslmode=disable"),
 		RedisURL:         getEnv("REDIS_URL", "redis://localhost:6379"),
-		JWTSecret:        getEnv("JWT_SECRET", "changeme"),
+		JWTAccessSecret:  getEnv("JWT_ACCESS_SECRET", "changeme-access"),
+		JWTRefreshSecret: getEnv("JWT_REFRESH_SECRET", "changeme-refresh"),
 		JWTAccessExpiry:  parseDuration(getEnv("JWT_ACCESS_EXPIRY", "15m")),
 		JWTRefreshExpiry: parseDuration(getEnv("JWT_REFRESH_EXPIRY", "168h")),
 		OTELEndpoint:     getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4318"),
