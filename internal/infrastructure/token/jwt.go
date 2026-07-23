@@ -17,7 +17,6 @@ const (
 	typeRefresh = "refresh"
 )
 
-// Claims transporte l'identité vérifiée extraite d'un token.
 type Claims struct {
 	UserID uuid.UUID
 	Role   user.Role
@@ -51,12 +50,10 @@ func (s *JWTService) GenerateTokens(u *user.User) (string, string, error) {
 	return access, refresh, nil
 }
 
-// ParseAccess valide un access token et retourne l'identité qu'il porte.
 func (s *JWTService) ParseAccess(raw string) (*Claims, error) {
 	return s.parse(raw, typeAccess, s.accessSecret)
 }
 
-// ParseRefresh valide un refresh token et retourne l'identité qu'il porte.
 func (s *JWTService) ParseRefresh(raw string) (*Claims, error) {
 	return s.parse(raw, typeRefresh, s.refreshSecret)
 }
