@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	domain "Lullify_Backend/internal/domain/stream"
 	"github.com/google/uuid"
+
+	domain "Lullify_Backend/internal/domain/stream"
 )
 
 const (
@@ -20,6 +21,7 @@ type streamSession struct {
 	mu          sync.RWMutex
 }
 
+// broadcast est gardé pour Sprint 4 (lecture Redis → auditeurs)
 func (ss *streamSession) broadcast(chunk domain.Chunk) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -33,18 +35,23 @@ func (ss *streamSession) broadcast(chunk domain.Chunk) {
 	}
 }
 
-type StreamEngine struct {
+// Engine gère le cycle de vie des streams live
+// (nommé Engine et non StreamEngine pour éviter le stutter stream.StreamEngine)
+type Engine struct {
 	sessions map[uuid.UUID]*streamSession
 	mu       sync.RWMutex
 }
 
-func NewStreamEngine() *StreamEngine {
-	return &StreamEngine{
+// StreamEngine est un alias pour la compatibilité avec le code existant
+type StreamEngine = Engine
+
+func NewStreamEngine() *Engine {
+	return &Engine{
 		sessions: make(map[uuid.UUID]*streamSession),
 	}
 }
 
-func (e *StreamEngine) Start(ctx context.Context, streamID uuid.UUID) error {
+func (e *Engine) Start(ctx context.Context, streamID uuid.UUID) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -72,10 +79,12 @@ func (e *StreamEngine) Start(ctx context.Context, streamID uuid.UUID) error {
 	return nil
 }
 
-func (e *StreamEngine) produce(ctx context.Context, streamID uuid.UUID, session *streamSession) {
+func (e *Engine) produce(ctx context.Context, streamID uuid.UUID, session *streamSession) {
 	defer func() {
-		// Cleanup HLS
-		session.segmenter.Cleanup()
+		// Cleanup HLS — erreur ignorée volontairement (ressources temp)
+		if err := session.segmenter.Cleanup(); err != nil {
+			_ = err
+		}
 
 		// Ferme tous les channels auditeurs
 		session.mu.Lock()
@@ -91,18 +100,13 @@ func (e *StreamEngine) produce(ctx context.Context, streamID uuid.UUID, session 
 		e.mu.Unlock()
 	}()
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			// TODO Sprint 4 : lire chunks depuis Redis (file de lecture playlist)
-			// Pour l'instant silence — la plomberie goroutine/channel est validée
-		}
-	}
+	// Bloque proprement jusqu'à l'annulation du context
+	// TODO Sprint 4 : lire chunks depuis Redis (file de lecture playlist)
+	// et appeler session.broadcast(chunk) pour chaque chunk reçu
+	<-ctx.Done()
 }
 
-func (e *StreamEngine) Stop(streamID uuid.UUID) error {
+func (e *Engine) Stop(streamID uuid.UUID) error {
 	e.mu.Lock()
 	session, exists := e.sessions[streamID]
 	e.mu.Unlock()
@@ -115,7 +119,7 @@ func (e *StreamEngine) Stop(streamID uuid.UUID) error {
 	return nil
 }
 
-func (e *StreamEngine) Subscribe(streamID uuid.UUID) (<-chan domain.Chunk, error) {
+func (e *Engine) Subscribe(streamID uuid.UUID) (<-chan domain.Chunk, error) {
 	e.mu.RLock()
 	session, exists := e.sessions[streamID]
 	e.mu.RUnlock()
@@ -133,7 +137,7 @@ func (e *StreamEngine) Subscribe(streamID uuid.UUID) (<-chan domain.Chunk, error
 	return ch, nil
 }
 
-func (e *StreamEngine) Unsubscribe(streamID uuid.UUID, ch <-chan domain.Chunk) {
+func (e *Engine) Unsubscribe(streamID uuid.UUID, ch <-chan domain.Chunk) {
 	e.mu.RLock()
 	session, exists := e.sessions[streamID]
 	e.mu.RUnlock()
@@ -150,14 +154,14 @@ func (e *StreamEngine) Unsubscribe(streamID uuid.UUID, ch <-chan domain.Chunk) {
 	session.mu.Unlock()
 }
 
-func (e *StreamEngine) IsRunning(streamID uuid.UUID) bool {
+func (e *Engine) IsRunning(streamID uuid.UUID) bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	_, exists := e.sessions[streamID]
 	return exists
 }
 
-func (e *StreamEngine) GetSegmenter(streamID uuid.UUID) (*HLSSegmenter, error) {
+func (e *Engine) GetSegmenter(streamID uuid.UUID) (*HLSSegmenter, error) {
 	e.mu.RLock()
 	session, exists := e.sessions[streamID]
 	e.mu.RUnlock()

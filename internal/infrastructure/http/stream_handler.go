@@ -21,7 +21,7 @@ type StreamHandler struct {
 	stop   *appstream.StopUseCase
 	repo   stream.Repository
 	tokens *token.JWTService
-	engine *infrastream.StreamEngine
+	engine *infrastream.Engine
 }
 
 func NewStreamHandler(
@@ -30,7 +30,7 @@ func NewStreamHandler(
 	stop *appstream.StopUseCase,
 	repo stream.Repository,
 	tokens *token.JWTService,
-	engine *infrastream.StreamEngine,
+	engine *infrastream.Engine,
 ) *StreamHandler {
 	return &StreamHandler{
 		create: create,
@@ -104,7 +104,8 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description"`
 		MountPoint  string `json:"mount_point"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	// decodeErr pour éviter le shadow sur err ligne précédente
+	if decodeErr := json.NewDecoder(r.Body).Decode(&body); decodeErr != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
@@ -200,7 +201,9 @@ func (h *StreamHandler) HLSPlaylist(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Write(playlist)
+	if _, writeErr := w.Write(playlist); writeErr != nil {
+		_ = writeErr
+	}
 }
 
 func (h *StreamHandler) HLSSegment(w http.ResponseWriter, r *http.Request) {
@@ -221,7 +224,9 @@ func (h *StreamHandler) HLSSegment(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "video/MP2T")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.Write(data)
+	if _, writeErr := w.Write(data); writeErr != nil {
+		_ = writeErr
+	}
 }
 
 func (h *StreamHandler) ownerIDFromRequest(r *http.Request) (uuid.UUID, error) {
