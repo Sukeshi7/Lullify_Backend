@@ -21,7 +21,10 @@ type streamSession struct {
 	mu          sync.RWMutex
 }
 
-// broadcast est gardé pour Sprint 4 (lecture Redis → auditeurs)
+// broadcast envoie un chunk à tous les auditeurs connectés.
+// Sera appelé au Sprint 4 lors de la lecture Redis.
+//
+//nolint:unused
 func (ss *streamSession) broadcast(chunk domain.Chunk) {
 	ss.mu.RLock()
 	defer ss.mu.RUnlock()
@@ -36,14 +39,10 @@ func (ss *streamSession) broadcast(chunk domain.Chunk) {
 }
 
 // Engine gère le cycle de vie des streams live
-// (nommé Engine et non StreamEngine pour éviter le stutter stream.StreamEngine)
 type Engine struct {
 	sessions map[uuid.UUID]*streamSession
 	mu       sync.RWMutex
 }
-
-// StreamEngine est un alias pour la compatibilité avec le code existant
-type StreamEngine = Engine
 
 func NewStreamEngine() *Engine {
 	return &Engine{
