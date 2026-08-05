@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type PlaylistRepository interface {
+type Repository interface {
 	Create(ctx context.Context, p *Playlist) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Playlist, error)
 	FindByOwner(ctx context.Context, ownerID uuid.UUID) ([]*Playlist, error)
@@ -14,6 +14,7 @@ type PlaylistRepository interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 }
 
+//nolint:revive // Named TrackRepository to distinguish from the main playlist Repository
 type TrackRepository interface {
 	Create(ctx context.Context, t *Track) error
 	FindByID(ctx context.Context, id uuid.UUID) (*Track, error)
