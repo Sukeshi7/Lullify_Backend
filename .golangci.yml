@@ -25,15 +25,13 @@ linters:
         - fieldalignment
     revive:
       rules:
-        - name: exported
-          severity: warning
         - name: unexported-return
           severity: warning
         - name: blank-imports
           severity: warning
     goconst:
       min-len: 3
-      min-occurrences: 3
+      min-occurrences: 5
     misspell:
       locale: US
 
@@ -43,10 +41,6 @@ linters:
         linters:
           - errcheck
           - goconst
-
-issues:
-  max-issues-per-linter: 50
-  max-same-issues: 5
 
 formatters:
   enable:

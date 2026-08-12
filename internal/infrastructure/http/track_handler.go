@@ -42,7 +42,7 @@ func (h *TrackHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, h.maxSize+1024)
 
-	if err := r.ParseMultipartForm(1 << 20); err != nil {
+	if parseErr := r.ParseMultipartForm(1 << 20); parseErr != nil {
 		writeError(w, http.StatusRequestEntityTooLarge, "file too large or invalid multipart form")
 		return
 	}
@@ -56,7 +56,7 @@ func (h *TrackHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "missing file")
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	track, err := h.upload.Execute(r.Context(), apptrack.UploadInput{
 		PlaylistID: playlistID,
@@ -109,17 +109,17 @@ func statusForUploadError(err error) int {
 
 func trackToJSON(t *playlist.Track) map[string]any {
 	return map[string]any{
-		"id":           t.ID.String(),
-		"playlist_id":  t.PlaylistID.String(),
-		"title":        t.Title,
-		"artist":       t.Artist,
-		"file_path":    t.FilePath,
-		"format":       string(t.Format),
-		"size_bytes":   t.SizeBytes,
-		"duration":     t.Duration,
-		"position":     t.Position,
-		"uploaded_by":  t.UploadedBy.String(),
-		"created_at":   t.CreatedAt.Format(time.RFC3339),
-		"updated_at":   t.UpdatedAt.Format(time.RFC3339),
+		"id":          t.ID.String(),
+		"playlist_id": t.PlaylistID.String(),
+		"title":       t.Title,
+		"artist":      t.Artist,
+		"file_path":   t.FilePath,
+		"format":      string(t.Format),
+		"size_bytes":  t.SizeBytes,
+		"duration":    t.Duration,
+		"position":    t.Position,
+		"uploaded_by": t.UploadedBy.String(),
+		"created_at":  t.CreatedAt.Format(time.RFC3339),
+		"updated_at":  t.UpdatedAt.Format(time.RFC3339),
 	}
 }
