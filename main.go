@@ -28,6 +28,8 @@ func main() {
 	// ── Repositories ───────────────────────────────────
 	userRepo := postgres.NewUserRepository(pool)
 	streamRepo := postgres.NewStreamRepository(pool)
+	playlistRepo := postgres.NewPlaylistRepository(pool)
+	trackRepo := postgres.NewTrackRepository(pool)
 
 	// ── Services ───────────────────────────────────────
 	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
@@ -50,9 +52,10 @@ func main() {
 		jwtService,
 		streamEngine,
 	)
+	playlistHandler := httphandler.NewPlaylistHandler(playlistRepo, trackRepo, jwtService)
 
 	// ── Router ─────────────────────────────────────────
-	router := httphandler.NewRouter(authHandler, streamHandler)
+	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler)
 
 	log.Printf("Lullify listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
