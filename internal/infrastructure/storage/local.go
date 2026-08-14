@@ -36,15 +36,17 @@ func (s *LocalStorage) Upload(ctx context.Context, key string, reader io.Reader,
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+	if err = os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 		return fmt.Errorf("creating dir for %q: %w", key, err)
 	}
 	f, err := os.Create(dest)
 	if err != nil {
 		return fmt.Errorf("creating file %q: %w", key, err)
 	}
-	defer f.Close()
-	if _, err := io.Copy(f, reader); err != nil {
+	defer func() {
+		_ = f.Close()
+	}()
+	if _, err = io.Copy(f, reader); err != nil {
 		return fmt.Errorf("writing file %q: %w", key, err)
 	}
 	return nil
@@ -55,7 +57,7 @@ func (s *LocalStorage) Delete(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
+	if err = os.Remove(dest); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("deleting %q: %w", key, err)
 	}
 	return nil
