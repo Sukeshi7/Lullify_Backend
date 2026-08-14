@@ -9,9 +9,11 @@ import (
 
 	"Lullify_Backend/config"
 	appstream "Lullify_Backend/internal/application/stream"
+	apptrack "Lullify_Backend/internal/application/track"
 	appuser "Lullify_Backend/internal/application/user"
 	httphandler "Lullify_Backend/internal/infrastructure/http"
 	"Lullify_Backend/internal/infrastructure/postgres"
+	"Lullify_Backend/internal/infrastructure/storage"
 	infrastream "Lullify_Backend/internal/infrastructure/stream"
 	"Lullify_Backend/internal/infrastructure/token"
 )
@@ -24,6 +26,18 @@ func main() {
 		log.Fatalf("cannot connect to database: %v", err)
 	}
 	defer pool.Close()
+
+	// ── Object storage (MinIO) ─────────────────────────
+	minioClient, err := storage.NewMinIOClient(
+		cfg.MinIOEndpoint,
+		cfg.MinIOAccessKey,
+		cfg.MinIOSecretKey,
+		cfg.MinIOBucket,
+		cfg.MinIOUseSSL,
+	)
+	if err != nil {
+		log.Fatalf("cannot initialize object storage: %v", err)
+	}
 
 	// ── Repositories ───────────────────────────────────
 	userRepo := postgres.NewUserRepository(pool)
@@ -41,6 +55,7 @@ func main() {
 	createStreamUC := appstream.NewCreateUseCase(streamRepo)
 	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine)
 	stopStreamUC := appstream.NewStopUseCase(streamRepo, streamEngine)
+	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, minioClient, cfg.MaxUploadSizeBytes)
 
 	// ── Handlers ───────────────────────────────────────
 	authHandler := httphandler.NewAuthHandler(registerUC, loginUC, userRepo, jwtService)
@@ -53,9 +68,10 @@ func main() {
 		streamEngine,
 	)
 	playlistHandler := httphandler.NewPlaylistHandler(playlistRepo, trackRepo, jwtService)
+	trackHandler := httphandler.NewTrackHandler(uploadTrackUC, jwtService, cfg.MaxUploadSizeBytes)
 
 	// ── Router ─────────────────────────────────────────
-	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler)
+	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler)
 
 	log.Printf("Lullify listening on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
