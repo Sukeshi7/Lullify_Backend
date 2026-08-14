@@ -27,37 +27,34 @@ func main() {
 	}
 	defer pool.Close()
 
-	// ── Object storage (MinIO) ─────────────────────────
-	minioClient, err := storage.NewMinIOClient(
-		cfg.MinIOEndpoint,
-		cfg.MinIOAccessKey,
-		cfg.MinIOSecretKey,
-		cfg.MinIOBucket,
-		cfg.MinIOUseSSL,
-	)
+	objectStorage, err := storage.New(storage.Options{
+		Provider:  cfg.StorageProvider,
+		LocalPath: cfg.StoragePath,
+		Endpoint:  cfg.MinIOEndpoint,
+		AccessKey: cfg.MinIOAccessKey,
+		SecretKey: cfg.MinIOSecretKey,
+		Bucket:    cfg.MinIOBucket,
+		UseSSL:    cfg.MinIOUseSSL,
+	})
 	if err != nil {
 		log.Fatalf("cannot initialize object storage: %v", err)
 	}
 
-	// ── Repositories ───────────────────────────────────
 	userRepo := postgres.NewUserRepository(pool)
 	streamRepo := postgres.NewStreamRepository(pool)
 	playlistRepo := postgres.NewPlaylistRepository(pool)
 	trackRepo := postgres.NewTrackRepository(pool)
 
-	// ── Services ───────────────────────────────────────
 	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 	streamEngine := infrastream.NewStreamEngine()
 
-	// ── Use cases ──────────────────────────────────────
 	registerUC := appuser.NewRegisterUseCase(userRepo)
 	loginUC := appuser.NewLoginUseCase(userRepo)
 	createStreamUC := appstream.NewCreateUseCase(streamRepo)
 	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine)
 	stopStreamUC := appstream.NewStopUseCase(streamRepo, streamEngine)
-	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, minioClient, cfg.MaxUploadSizeBytes)
+	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, objectStorage, cfg.MaxUploadSizeBytes)
 
-	// ── Handlers ───────────────────────────────────────
 	authHandler := httphandler.NewAuthHandler(registerUC, loginUC, userRepo, jwtService)
 	streamHandler := httphandler.NewStreamHandler(
 		createStreamUC,
@@ -70,7 +67,6 @@ func main() {
 	playlistHandler := httphandler.NewPlaylistHandler(playlistRepo, trackRepo, jwtService)
 	trackHandler := httphandler.NewTrackHandler(uploadTrackUC, jwtService, cfg.MaxUploadSizeBytes)
 
-	// ── Router ─────────────────────────────────────────
 	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler)
 
 	log.Printf("Lullify listening on :%s", cfg.Port)
