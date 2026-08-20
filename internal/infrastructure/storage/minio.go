@@ -33,7 +33,9 @@ func NewMinIOClient(endpoint, accessKey, secretKey, bucket string, useSSL bool) 
 		return nil, fmt.Errorf("checking bucket %q: %w", bucket, err)
 	}
 	if !exists {
-		return nil, fmt.Errorf("bucket %q does not exist", bucket)
+		if err := client.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
+			return nil, fmt.Errorf("creating bucket %q: %w", bucket, err)
+		}
 	}
 
 	return &MinIOClient{client: client, bucket: bucket}, nil
