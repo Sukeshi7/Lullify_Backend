@@ -5,6 +5,9 @@ services:
       dockerfile: docker/Dockerfile
     ports: ["8080:8080"]
     env_file: .env
+    environment:
+      DATABASE_URL: postgres://lullify:lullify_dev@postgres:5432/lullify?sslmode=disable
+      REDIS_URL: redis://redis:6379
     depends_on: [postgres, redis, minio]
 
   postgres:

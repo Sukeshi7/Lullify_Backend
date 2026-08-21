@@ -38,7 +38,7 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 		return stream.ErrStreamAlreadyLive
 	}
 
-	if err := uc.engine.Start(ctx, input.StreamID); err != nil {
+		if err := uc.engine.Start(context.Background(), input.StreamID); err != nil {
 		return fmt.Errorf("starting engine: %w", err)
 	}
 
