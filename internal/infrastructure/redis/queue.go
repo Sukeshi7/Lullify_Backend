@@ -25,7 +25,7 @@ type TrackJob struct {
 func (c *Client) Push(ctx context.Context, streamID string, job TrackJob) error {
 	data, err := json.Marshal(job)
 	if err != nil {
-		return fmt.Errorf("marshalling track job: %w", err)
+		return fmt.Errorf("marshaling track job: %w", err)
 	}
 
 	key := playlistQueuePrefix + streamID

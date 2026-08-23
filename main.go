@@ -34,7 +34,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("cannot connect to redis: %v", err)
 	}
-	defer redisClient.Close()
+	defer func() { _ = redisClient.Close() }()
 
 	// ── Storage ────────────────────────────────────────
 	objectStorage, err := storage.New(storage.Options{
@@ -84,7 +84,7 @@ func main() {
 	// ── Router ─────────────────────────────────────────
 	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler)
 
-	// ── Démarrage ──────────────────────────────────────
+	// ── Start server ──────────────────────────────────────
 	log.Printf("Lullify listening on :%s", cfg.Port)
 	_ = redisClient // utilisé par le Stream Engine au Sprint 5
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
