@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"Lullify_Backend/config"
+	apphistory "Lullify_Backend/internal/application/history"
 	appstream "Lullify_Backend/internal/application/stream"
 	apptrack "Lullify_Backend/internal/application/track"
 	appuser "Lullify_Backend/internal/application/user"
@@ -55,6 +56,7 @@ func main() {
 	streamRepo := postgres.NewStreamRepository(pool)
 	playlistRepo := postgres.NewPlaylistRepository(pool)
 	trackRepo := postgres.NewTrackRepository(pool)
+	historyRepo := postgres.NewHistoryRepository(pool)
 
 	// ── Services ───────────────────────────────────────
 	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
@@ -67,6 +69,8 @@ func main() {
 	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine)
 	stopStreamUC := appstream.NewStopUseCase(streamRepo, streamEngine)
 	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, objectStorage, cfg.MaxUploadSizeBytes)
+	recordHistoryUC := apphistory.NewRecordUseCase(historyRepo)
+	listHistoryUC := apphistory.NewListUseCase(historyRepo)
 
 	// ── Handlers ───────────────────────────────────────
 	authHandler := httphandler.NewAuthHandler(registerUC, loginUC, userRepo, jwtService)
@@ -80,9 +84,10 @@ func main() {
 	)
 	playlistHandler := httphandler.NewPlaylistHandler(playlistRepo, trackRepo, jwtService)
 	trackHandler := httphandler.NewTrackHandler(uploadTrackUC, jwtService, cfg.MaxUploadSizeBytes)
+	historyHandler := httphandler.NewHistoryHandler(recordHistoryUC, listHistoryUC, jwtService)
 
 	// ── Router ─────────────────────────────────────────
-	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler)
+	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler, historyHandler)
 
 	// ── Start server ──────────────────────────────────────
 	log.Printf("Lullify listening on :%s", cfg.Port)

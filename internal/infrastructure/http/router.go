@@ -4,12 +4,13 @@ import (
 	"net/http"
 )
 
-func NewRouter(auth *AuthHandler, stream *StreamHandler, playlist *PlaylistHandler, track *TrackHandler) http.Handler {
+func NewRouter(auth *AuthHandler, stream *StreamHandler, playlist *PlaylistHandler, track *TrackHandler, history *HistoryHandler) http.Handler {
 	mux := http.NewServeMux()
 	auth.Routes(mux)
 	stream.Routes(mux)
 	playlist.Routes(mux)
 	track.Routes(mux)
+	history.Routes(mux)
 	return corsMiddleware(mux)
 }
 
