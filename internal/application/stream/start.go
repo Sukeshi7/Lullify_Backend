@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"Lullify_Backend/internal/domain/stream"
+	"Lullify_Backend/internal/infrastructure/observability"
 
 	"github.com/google/uuid"
 )
@@ -46,6 +47,9 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 		_ = uc.engine.Stop(input.StreamID)
 		return fmt.Errorf("updating stream status: %w", err)
 	}
+
+	// Métrique : un stream de plus en live
+	observability.ActiveStreams.Inc()
 
 	return nil
 }

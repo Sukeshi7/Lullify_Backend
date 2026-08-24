@@ -13,6 +13,7 @@ import (
 	apptrack "Lullify_Backend/internal/application/track"
 	appuser "Lullify_Backend/internal/application/user"
 	httphandler "Lullify_Backend/internal/infrastructure/http"
+	"Lullify_Backend/internal/infrastructure/observability"
 	"Lullify_Backend/internal/infrastructure/postgres"
 	infraredis "Lullify_Backend/internal/infrastructure/redis"
 	"Lullify_Backend/internal/infrastructure/storage"
@@ -23,8 +24,23 @@ import (
 func main() {
 	cfg := config.Load()
 
+	// ── Logger ─────────────────────────────────────────
+	observability.InitLogger(cfg.OTELServiceName)
+
+	// ── OTEL Tracer ────────────────────────────────────
+	ctx := context.Background()
+	shutdownTracer, err := observability.InitTracer(ctx, cfg.OTELServiceName, cfg.OTELEndpoint)
+	if err != nil {
+		log.Fatalf("cannot initialize tracer: %v", err)
+	}
+	defer func() {
+		if err := shutdownTracer(ctx); err != nil {
+			observability.Logger.Error().Err(err).Msg("tracer shutdown error")
+		}
+	}()
+
 	// ── PostgreSQL ─────────────────────────────────────
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("cannot connect to database: %v", err)
 	}
@@ -89,9 +105,9 @@ func main() {
 	// ── Router ─────────────────────────────────────────
 	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler, historyHandler)
 
-	// ── Start server ──────────────────────────────────────
-	log.Printf("Lullify listening on :%s", cfg.Port)
-	_ = redisClient // utilisé par le Stream Engine au Sprint 5
+	// ── Start server ───────────────────────────────────
+	observability.Logger.Info().Str("port", cfg.Port).Msg("Lullify listening")
+	_ = redisClient
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
 		log.Fatalf("server error: %v", err)
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	domain "Lullify_Backend/internal/domain/stream"
+	"Lullify_Backend/internal/infrastructure/observability"
 )
 
 const (
@@ -22,7 +23,7 @@ type streamSession struct {
 }
 
 // broadcast envoie un chunk à tous les auditeurs connectés.
-// Sera appelé au Sprint 4 lors de la lecture Redis.
+// Sera appelé au Sprint 5 lors de la lecture Redis.
 //
 //nolint:unused
 func (ss *streamSession) broadcast(chunk domain.Chunk) {
@@ -80,15 +81,23 @@ func (e *Engine) Start(ctx context.Context, streamID uuid.UUID) error {
 
 func (e *Engine) produce(ctx context.Context, streamID uuid.UUID, session *streamSession) {
 	defer func() {
-		// Cleanup HLS — erreur ignorée volontairement (ressources temp)
+		// Cleanup HLS
 		if err := session.segmenter.Cleanup(); err != nil {
 			_ = err
 		}
 
-		// Ferme tous les channels auditeurs
+		// Ferme tous les channels auditeurs + compte les déconnexions
 		session.mu.Lock()
+		abrupt := len(session.subscribers)
 		for _, ch := range session.subscribers {
 			close(ch)
+			// Chaque auditeur encore connecté = déconnexion abrupte
+			observability.StreamDisconnections.WithLabelValues("abrupt").Inc()
+			observability.ActiveListeners.Dec()
+		}
+		if abrupt == 0 {
+			// Arrêt propre sans auditeurs
+			observability.StreamDisconnections.WithLabelValues("normal").Inc()
 		}
 		session.subscribers = make(map[<-chan domain.Chunk]chan domain.Chunk)
 		session.mu.Unlock()
@@ -100,7 +109,7 @@ func (e *Engine) produce(ctx context.Context, streamID uuid.UUID, session *strea
 	}()
 
 	// Bloque proprement jusqu'à l'annulation du context
-	// TODO Sprint 4 : lire chunks depuis Redis (file de lecture playlist)
+	// TODO Sprint 5 : lire chunks depuis Redis (file de lecture playlist)
 	// et appeler session.broadcast(chunk) pour chaque chunk reçu
 	<-ctx.Done()
 }
@@ -133,6 +142,9 @@ func (e *Engine) Subscribe(streamID uuid.UUID) (<-chan domain.Chunk, error) {
 	session.subscribers[ch] = ch
 	session.mu.Unlock()
 
+	// Métrique : un auditeur de plus
+	observability.ActiveListeners.Inc()
+
 	return ch, nil
 }
 
@@ -149,6 +161,9 @@ func (e *Engine) Unsubscribe(streamID uuid.UUID, ch <-chan domain.Chunk) {
 	if internalCh, ok := session.subscribers[ch]; ok {
 		close(internalCh)
 		delete(session.subscribers, ch)
+		// Métrique : un auditeur de moins + déconnexion normale
+		observability.ActiveListeners.Dec()
+		observability.StreamDisconnections.WithLabelValues("normal").Inc()
 	}
 	session.mu.Unlock()
 }
