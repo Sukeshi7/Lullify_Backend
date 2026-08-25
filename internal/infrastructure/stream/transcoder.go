@@ -30,7 +30,7 @@ func (t *Transcoder) TranscodeFile(ctx context.Context, filePath string) error {
 	if err != nil {
 		return fmt.Errorf("opening audio file %q: %w", filePath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	buf := make([]byte, chunkSize)
 

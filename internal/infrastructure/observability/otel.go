@@ -10,7 +10,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-// InitTracer initialise le SDK OpenTelemetry et retourne une fonction de shutdown.
+// InitTracer initializes the OpenTelemetry SDK and returns a shutdown function.
 // Si endpoint est vide, un exporter no-op est utilisé (dev sans collector).
 func InitTracer(ctx context.Context, serviceName, endpoint string) (func(context.Context) error, error) {
 	var exporter sdktrace.SpanExporter

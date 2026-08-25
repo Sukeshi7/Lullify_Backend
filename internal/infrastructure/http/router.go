@@ -20,7 +20,7 @@ func NewRouter(
 	track.Routes(mux)
 	history.Routes(mux)
 
-	// /metrics — endpoint Prometheus (non protégé en dev, à sécuriser en prod)
+	// /metrics — endpoint Prometheus (unprotected in dev, secure before prod)
 	mux.Handle("GET /metrics", observability.MetricsHandler())
 
 	// Chaîne de middlewares : CORS → OTEL (traces + logs + métriques)

@@ -10,7 +10,7 @@ import (
 
 var Logger zerolog.Logger
 
-// InitLogger initialise zerolog en JSON structuré.
+// InitLogger initializes zerolog in structured JSON format.
 func InitLogger(serviceName string) {
 	Logger = zerolog.New(os.Stdout).
 		With().

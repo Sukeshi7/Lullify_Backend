@@ -33,8 +33,8 @@ func main() {
 		observability.Logger.Fatal().Err(err).Msg("cannot initialize tracer")
 	}
 	defer func() {
-		if err := shutdownTracer(ctx); err != nil {
-			observability.Logger.Error().Err(err).Msg("tracer shutdown error")
+		if shutdownErr := shutdownTracer(ctx); shutdownErr != nil {
+			observability.Logger.Error().Err(shutdownErr).Msg("tracer shutdown error")
 		}
 	}()
 
