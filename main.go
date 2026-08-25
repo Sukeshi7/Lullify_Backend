@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,7 +30,7 @@ func main() {
 	ctx := context.Background()
 	shutdownTracer, err := observability.InitTracer(ctx, cfg.OTELServiceName, cfg.OTELEndpoint)
 	if err != nil {
-		log.Fatalf("cannot initialize tracer: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("cannot initialize tracer")
 	}
 	defer func() {
 		if err := shutdownTracer(ctx); err != nil {
@@ -42,14 +41,14 @@ func main() {
 	// ── PostgreSQL ─────────────────────────────────────
 	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("cannot connect to database: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("cannot connect to database")
 	}
 	defer pool.Close()
 
 	// ── Redis ──────────────────────────────────────────
 	redisClient, err := infraredis.NewClient(cfg.RedisURL)
 	if err != nil {
-		log.Fatalf("cannot connect to redis: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("cannot connect to redis")
 	}
 	defer func() { _ = redisClient.Close() }()
 
@@ -64,7 +63,7 @@ func main() {
 		UseSSL:    cfg.MinIOUseSSL,
 	})
 	if err != nil {
-		log.Fatalf("cannot initialize object storage: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("cannot initialize object storage")
 	}
 
 	// ── Repositories ───────────────────────────────────
@@ -109,6 +108,6 @@ func main() {
 	observability.Logger.Info().Str("port", cfg.Port).Msg("Lullify listening")
 	_ = redisClient
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
-		log.Fatalf("server error: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("server error")
 	}
 }
