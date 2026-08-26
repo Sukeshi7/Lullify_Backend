@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"Lullify_Backend/config"
+	appfavorite "Lullify_Backend/internal/application/favorite"
 	apphistory "Lullify_Backend/internal/application/history"
 	appstream "Lullify_Backend/internal/application/stream"
 	apptrack "Lullify_Backend/internal/application/track"
@@ -72,6 +73,7 @@ func main() {
 	playlistRepo := postgres.NewPlaylistRepository(pool)
 	trackRepo := postgres.NewTrackRepository(pool)
 	historyRepo := postgres.NewHistoryRepository(pool)
+	favoriteRepo := postgres.NewFavoriteRepository(pool)
 
 	// ── Services ───────────────────────────────────────
 	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
@@ -86,6 +88,9 @@ func main() {
 	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, objectStorage, cfg.MaxUploadSizeBytes)
 	recordHistoryUC := apphistory.NewRecordUseCase(historyRepo)
 	listHistoryUC := apphistory.NewListUseCase(historyRepo)
+	addFavoriteUC := appfavorite.NewAddUseCase(favoriteRepo)
+	removeFavoriteUC := appfavorite.NewRemoveUseCase(favoriteRepo)
+	listFavoritesUC := appfavorite.NewListUseCase(favoriteRepo)
 
 	// ── Handlers ───────────────────────────────────────
 	authHandler := httphandler.NewAuthHandler(registerUC, loginUC, userRepo, jwtService)
@@ -100,9 +105,10 @@ func main() {
 	playlistHandler := httphandler.NewPlaylistHandler(playlistRepo, trackRepo, jwtService)
 	trackHandler := httphandler.NewTrackHandler(uploadTrackUC, jwtService, cfg.MaxUploadSizeBytes)
 	historyHandler := httphandler.NewHistoryHandler(recordHistoryUC, listHistoryUC, jwtService)
+	favoriteHandler := httphandler.NewFavoriteHandler(addFavoriteUC, removeFavoriteUC, listFavoritesUC, jwtService)
 
 	// ── Router ─────────────────────────────────────────
-	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler, historyHandler)
+	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler, historyHandler, favoriteHandler)
 
 	// ── Start server ───────────────────────────────────
 	observability.Logger.Info().Str("port", cfg.Port).Msg("Lullify listening")
