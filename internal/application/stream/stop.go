@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"Lullify_Backend/internal/domain/stream"
+	"Lullify_Backend/internal/infrastructure/observability"
 
 	"github.com/google/uuid"
 )
@@ -45,6 +46,9 @@ func (uc *StopUseCase) Execute(ctx context.Context, input StopInput) error {
 	if err := uc.repo.UpdateStatus(ctx, input.StreamID, stream.StatusEnded); err != nil {
 		return fmt.Errorf("updating stream status: %w", err)
 	}
+
+	// Métrique : un stream de moins en live
+	observability.ActiveStreams.Dec()
 
 	return nil
 }

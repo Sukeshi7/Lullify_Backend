@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	domain "Lullify_Backend/internal/domain/stream"
+	"Lullify_Backend/internal/infrastructure/observability"
 )
 
 const (
@@ -15,14 +16,14 @@ const (
 )
 
 type streamSession struct {
-	cancel      context.CancelFunc
-	segmenter   *HLSSegmenter
-	subscribers map[<-chan domain.Chunk]chan domain.Chunk
-	mu          sync.RWMutex
+	cancel        context.CancelFunc
+	segmenter     *HLSSegmenter
+	audioFilePath string
+	subscribers   map[<-chan domain.Chunk]chan domain.Chunk
+	mu            sync.RWMutex
 }
 
 // broadcast envoie un chunk à tous les auditeurs connectés.
-// Sera appelé au Sprint 4 lors de la lecture Redis.
 //
 //nolint:unused
 func (ss *streamSession) broadcast(chunk domain.Chunk) {
@@ -33,7 +34,6 @@ func (ss *streamSession) broadcast(chunk domain.Chunk) {
 		select {
 		case ch <- chunk:
 		default:
-			// auditeur trop lent — on drop plutôt que bloquer
 		}
 	}
 }
@@ -80,29 +80,41 @@ func (e *Engine) Start(ctx context.Context, streamID uuid.UUID) error {
 
 func (e *Engine) produce(ctx context.Context, streamID uuid.UUID, session *streamSession) {
 	defer func() {
-		// Cleanup HLS — erreur ignorée volontairement (ressources temp)
 		if err := session.segmenter.Cleanup(); err != nil {
 			_ = err
 		}
 
-		// Ferme tous les channels auditeurs
 		session.mu.Lock()
+		abrupt := len(session.subscribers)
 		for _, ch := range session.subscribers {
 			close(ch)
+			observability.StreamDisconnections.WithLabelValues("abrupt").Inc()
+			observability.ActiveListeners.Dec()
+		}
+		if abrupt == 0 {
+			observability.StreamDisconnections.WithLabelValues("normal").Inc()
 		}
 		session.subscribers = make(map[<-chan domain.Chunk]chan domain.Chunk)
 		session.mu.Unlock()
 
-		// Supprime la session
 		e.mu.Lock()
 		delete(e.sessions, streamID)
 		e.mu.Unlock()
 	}()
 
-	// Bloque proprement jusqu'à l'annulation du context
-	// TODO Sprint 4 : lire chunks depuis Redis (file de lecture playlist)
-	// et appeler session.broadcast(chunk) pour chaque chunk reçu
-	<-ctx.Done()
+	if session.audioFilePath != "" {
+		transcoder := NewTranscoder(session.segmenter)
+		if err := transcoder.TranscodeFile(ctx, session.audioFilePath); err != nil {
+			log := observability.FromContext(ctx)
+			log.Error().
+				Err(err).
+				Str("stream_id", streamID.String()).
+				Msg("transcoder error")
+		}
+	} else {
+		// Pas de fichier audio — attend l'annulation du context
+		<-ctx.Done()
+	}
 }
 
 func (e *Engine) Stop(streamID uuid.UUID) error {
@@ -133,6 +145,8 @@ func (e *Engine) Subscribe(streamID uuid.UUID) (<-chan domain.Chunk, error) {
 	session.subscribers[ch] = ch
 	session.mu.Unlock()
 
+	observability.ActiveListeners.Inc()
+
 	return ch, nil
 }
 
@@ -149,6 +163,8 @@ func (e *Engine) Unsubscribe(streamID uuid.UUID, ch <-chan domain.Chunk) {
 	if internalCh, ok := session.subscribers[ch]; ok {
 		close(internalCh)
 		delete(session.subscribers, ch)
+		observability.ActiveListeners.Dec()
+		observability.StreamDisconnections.WithLabelValues("normal").Inc()
 	}
 	session.mu.Unlock()
 }
@@ -169,4 +185,21 @@ func (e *Engine) GetSegmenter(streamID uuid.UUID) (*HLSSegmenter, error) {
 		return nil, domain.ErrStreamNotLive
 	}
 	return session.segmenter, nil
+}
+
+// SetAudioFile associe un fichier audio local à un stream actif
+func (e *Engine) SetAudioFile(streamID uuid.UUID, filePath string) error {
+	e.mu.RLock()
+	session, exists := e.sessions[streamID]
+	e.mu.RUnlock()
+
+	if !exists {
+		return domain.ErrStreamNotLive
+	}
+
+	session.mu.Lock()
+	session.audioFilePath = filePath
+	session.mu.Unlock()
+
+	return nil
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -13,6 +12,7 @@ import (
 	apptrack "Lullify_Backend/internal/application/track"
 	appuser "Lullify_Backend/internal/application/user"
 	httphandler "Lullify_Backend/internal/infrastructure/http"
+	"Lullify_Backend/internal/infrastructure/observability"
 	"Lullify_Backend/internal/infrastructure/postgres"
 	infraredis "Lullify_Backend/internal/infrastructure/redis"
 	"Lullify_Backend/internal/infrastructure/storage"
@@ -23,17 +23,32 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// ── PostgreSQL ─────────────────────────────────────
-	pool, err := pgxpool.New(context.Background(), cfg.DatabaseURL)
+	// ── Logger ─────────────────────────────────────────
+	observability.InitLogger(cfg.OTELServiceName)
+
+	// ── OTEL Tracer ────────────────────────────────────
+	ctx := context.Background()
+	shutdownTracer, err := observability.InitTracer(ctx, cfg.OTELServiceName, cfg.OTELEndpoint)
 	if err != nil {
-		log.Fatalf("cannot connect to database: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("cannot initialize tracer")
+	}
+	defer func() {
+		if shutdownErr := shutdownTracer(ctx); shutdownErr != nil {
+			observability.Logger.Error().Err(shutdownErr).Msg("tracer shutdown error")
+		}
+	}()
+
+	// ── PostgreSQL ─────────────────────────────────────
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		observability.Logger.Fatal().Err(err).Msg("cannot connect to database")
 	}
 	defer pool.Close()
 
 	// ── Redis ──────────────────────────────────────────
 	redisClient, err := infraredis.NewClient(cfg.RedisURL)
 	if err != nil {
-		log.Fatalf("cannot connect to redis: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("cannot connect to redis")
 	}
 	defer func() { _ = redisClient.Close() }()
 
@@ -48,7 +63,7 @@ func main() {
 		UseSSL:    cfg.MinIOUseSSL,
 	})
 	if err != nil {
-		log.Fatalf("cannot initialize object storage: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("cannot initialize object storage")
 	}
 
 	// ── Repositories ───────────────────────────────────
@@ -89,10 +104,10 @@ func main() {
 	// ── Router ─────────────────────────────────────────
 	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler, historyHandler)
 
-	// ── Start server ──────────────────────────────────────
-	log.Printf("Lullify listening on :%s", cfg.Port)
-	_ = redisClient // utilisé par le Stream Engine au Sprint 5
+	// ── Start server ───────────────────────────────────
+	observability.Logger.Info().Str("port", cfg.Port).Msg("Lullify listening")
+	_ = redisClient
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
-		log.Fatalf("server error: %v", err)
+		observability.Logger.Fatal().Err(err).Msg("server error")
 	}
 }

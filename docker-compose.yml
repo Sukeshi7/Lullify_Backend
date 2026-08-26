@@ -1,42 +1,72 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile
-    ports: ["8080:8080"]
-    env_file: .env
-    environment:
-      DATABASE_URL: postgres://lullify:lullify_dev@postgres:5432/lullify?sslmode=disable
-      REDIS_URL: redis://redis:6379
-    depends_on: [postgres, redis, minio]
+    api:
+        build:
+            context: .
+            dockerfile: docker/Dockerfile
+        ports: ["8080:8080"]
+        env_file: .env
+        environment:
+            DATABASE_URL: postgres://lullify:lullify_dev@postgres:5432/lullify?sslmode=disable
+            REDIS_URL: redis://redis:6379
+            OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+        depends_on: [postgres, redis, otel-collector]
 
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: lullify
-      POSTGRES_USER: lullify
-      POSTGRES_PASSWORD: lullify_dev
-    ports: ["5432:5432"]
-    volumes: [pg_data:/var/lib/postgresql/data]
+    postgres:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_DB: lullify
+            POSTGRES_USER: lullify
+            POSTGRES_PASSWORD: lullify_dev
+        ports: ["5432:5432"]
+        volumes:
+            - pg_data:/var/lib/postgresql/data
+            - ./migrations:/docker-entrypoint-initdb.d
 
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
+    redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
 
-  minio:
-    image: minio/minio:latest
-    container_name: lullify-minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: lullify_admin
-      MINIO_ROOT_PASSWORD: lullify_dev_secret_change_me
-    volumes:
-      - minio_data:/data
-    command: server /data --console-address ":9001"
-    restart: unless-stopped
+    otel-collector:
+        image: otel/opentelemetry-collector-contrib:0.102.0
+        command: ["--config=/etc/otel-collector-config.yml"]
+        volumes:
+            - ./otel-collector-config.yml:/etc/otel-collector-config.yml
+        ports:
+            - "4317:4317"   # gRPC
+            - "4318:4318"   # HTTP
+            - "8889:8889"   # Prometheus metrics export
+
+    prometheus:
+        image: prom/prometheus:v2.52.0
+        volumes:
+            - ./prometheus.yml:/etc/prometheus/prometheus.yml
+            - prometheus_data:/prometheus
+        ports: ["9090:9090"]
+        command:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.retention.time=15d"
+
+    loki:
+        image: grafana/loki:2.9.8
+        volumes:
+            - ./loki-config.yml:/etc/loki/local-config.yaml
+            - loki_data:/loki
+        ports: ["3100:3100"]
+        command: -config.file=/etc/loki/local-config.yaml
+
+    grafana:
+        image: grafana/grafana:10.4.3
+        ports: ["3000:3000"]
+        environment:
+            GF_SECURITY_ADMIN_PASSWORD: lullify_admin
+            GF_USERS_ALLOW_SIGN_UP: "false"
+        volumes:
+            - grafana_data:/var/lib/grafana
+            - ./grafana/provisioning:/etc/grafana/provisioning
+        depends_on: [prometheus, loki]
 
 volumes:
-  pg_data:
-  minio_data:
+    pg_data:
+    prometheus_data:
+    loki_data:
+    grafana_data:
