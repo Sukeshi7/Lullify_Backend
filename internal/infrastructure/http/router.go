@@ -12,6 +12,7 @@ func NewRouter(
 	playlist *PlaylistHandler,
 	track *TrackHandler,
 	history *HistoryHandler,
+	favorite *FavoriteHandler,
 ) http.Handler {
 	mux := http.NewServeMux()
 	auth.Routes(mux)
@@ -19,6 +20,7 @@ func NewRouter(
 	playlist.Routes(mux)
 	track.Routes(mux)
 	history.Routes(mux)
+	favorite.Routes(mux)
 
 	// /metrics — endpoint Prometheus (unprotected in dev, secure before prod)
 	mux.Handle("GET /metrics", observability.MetricsHandler())
