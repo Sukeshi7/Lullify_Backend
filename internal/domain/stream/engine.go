@@ -14,4 +14,5 @@ type Engine interface {
 	Subscribe(streamID uuid.UUID) (<-chan Chunk, error)
 	Unsubscribe(streamID uuid.UUID, ch <-chan Chunk)
 	IsRunning(streamID uuid.UUID) bool
+	SetAudioFile(streamID uuid.UUID, filePath string) error
 }

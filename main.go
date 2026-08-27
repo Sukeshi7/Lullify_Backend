@@ -83,7 +83,7 @@ func main() {
 	registerUC := appuser.NewRegisterUseCase(userRepo)
 	loginUC := appuser.NewLoginUseCase(userRepo)
 	createStreamUC := appstream.NewCreateUseCase(streamRepo)
-	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine)
+	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine, redisClient)
 	stopStreamUC := appstream.NewStopUseCase(streamRepo, streamEngine)
 	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, objectStorage, cfg.MaxUploadSizeBytes)
 	recordHistoryUC := apphistory.NewRecordUseCase(historyRepo)
@@ -112,7 +112,6 @@ func main() {
 
 	// ── Start server ───────────────────────────────────
 	observability.Logger.Info().Str("port", cfg.Port).Msg("Lullify listening")
-	_ = redisClient
 	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
 		observability.Logger.Fatal().Err(err).Msg("server error")
 	}
