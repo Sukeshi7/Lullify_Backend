@@ -41,20 +41,21 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 		return stream.ErrStreamAlreadyLive
 	}
 
-	if err := uc.engine.Start(context.Background(), input.StreamID); err != nil {
+	err = uc.engine.Start(context.Background(), input.StreamID)
+	if err != nil {
 		return fmt.Errorf("starting engine: %w", err)
 	}
 
-	if err := uc.repo.UpdateStatus(ctx, input.StreamID, stream.StatusLive); err != nil {
+	err = uc.repo.UpdateStatus(ctx, input.StreamID, stream.StatusLive)
+	if err != nil {
 		_ = uc.engine.Stop(input.StreamID)
 		return fmt.Errorf("updating stream status: %w", err)
 	}
 
-	// Récupère la première track depuis la file Redis et associe le fichier audio
-	job, err := uc.queue.Pop(ctx, input.StreamID.String())
-	if err != nil {
+	job, popErr := uc.queue.Pop(ctx, input.StreamID.String())
+	if popErr != nil {
 		observability.Logger.Warn().
-			Err(err).
+			Err(popErr).
 			Str("stream_id", input.StreamID.String()).
 			Msg("failed to pop track from queue")
 	} else if job != nil {
