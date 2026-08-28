@@ -106,9 +106,20 @@ func main() {
 	trackHandler := httphandler.NewTrackHandler(uploadTrackUC, jwtService, cfg.MaxUploadSizeBytes)
 	historyHandler := httphandler.NewHistoryHandler(recordHistoryUC, listHistoryUC, jwtService)
 	favoriteHandler := httphandler.NewFavoriteHandler(addFavoriteUC, removeFavoriteUC, listFavoritesUC, jwtService)
+	adminHandler := httphandler.NewAdminHandler(userRepo, jwtService)
+	healthHandler := httphandler.NewHealthHandler(pool, redisClient)
 
 	// ── Router ─────────────────────────────────────────
-	router := httphandler.NewRouter(authHandler, streamHandler, playlistHandler, trackHandler, historyHandler, favoriteHandler)
+	router := httphandler.NewRouter(
+		authHandler,
+		streamHandler,
+		playlistHandler,
+		trackHandler,
+		historyHandler,
+		favoriteHandler,
+		adminHandler,
+		healthHandler,
+	)
 
 	// ── Start server ───────────────────────────────────
 	observability.Logger.Info().Str("port", cfg.Port).Msg("Lullify listening")
