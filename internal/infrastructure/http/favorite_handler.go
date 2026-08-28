@@ -126,7 +126,7 @@ func (h *FavoriteHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 	for _, f := range favorites {
 		out = append(out, favoriteToJSON(f))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"favorites": out, "total": len(out)})
+	writeJSON(w, http.StatusOK, map[string]any{"favorites": out, fieldTotal: len(out)})
 }
 
 // --- helpers ---

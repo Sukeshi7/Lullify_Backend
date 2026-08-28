@@ -33,3 +33,7 @@ func NewClient(redisURL string) (*Client, error) {
 func (c *Client) Close() error {
 	return c.rdb.Close()
 }
+
+func (c *Client) Ping(ctx context.Context) error {
+	return c.rdb.Ping(ctx).Err()
+}

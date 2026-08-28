@@ -87,8 +87,8 @@ func (h *StreamHandler) ListActive(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"streams": result,
-		"total":   len(result),
+		"streams":  result,
+		fieldTotal: len(result),
 	})
 }
 
@@ -127,7 +127,7 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 			"title":       s.Title,
 			"description": s.Description,
 			"mount_point": s.MountPoint,
-			"status":      string(s.Status),
+			fieldStatus:   string(s.Status),
 		},
 	})
 }
@@ -153,7 +153,7 @@ func (h *StreamHandler) Start(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "live"})
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "live"})
 }
 
 func (h *StreamHandler) Stop(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +177,7 @@ func (h *StreamHandler) Stop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "offline"})
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "offline"})
 }
 
 func (h *StreamHandler) HLSPlaylist(w http.ResponseWriter, r *http.Request) {
@@ -253,8 +253,6 @@ func statusForStreamError(err error) int {
 		return http.StatusForbidden
 	case errors.Is(err, stream.ErrEmptyTitle):
 		return http.StatusBadRequest
-	case errors.Is(err, stream.ErrMountPointTaken):
-		return http.StatusConflict
 	default:
 		return http.StatusInternalServerError
 	}

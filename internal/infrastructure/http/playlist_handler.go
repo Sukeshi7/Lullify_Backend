@@ -93,7 +93,7 @@ func (h *PlaylistHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 	for _, p := range list {
 		out = append(out, playlistToJSON(p))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"playlists": out, "total": len(out)})
+	writeJSON(w, http.StatusOK, map[string]any{"playlists": out, fieldTotal: len(out)})
 }
 
 // --- helpers ---

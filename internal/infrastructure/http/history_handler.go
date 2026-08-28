@@ -93,7 +93,7 @@ func (h *HistoryHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		out = append(out, historyToJSON(e))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"history": out, "total": len(out)})
+	writeJSON(w, http.StatusOK, map[string]any{"history": out, fieldTotal: len(out)})
 }
 
 // --- helpers ---

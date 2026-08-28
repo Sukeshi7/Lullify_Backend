@@ -10,6 +10,11 @@ import (
 	"Lullify_Backend/internal/infrastructure/token"
 )
 
+const (
+	fieldStatus = "status"
+	fieldTotal  = "total"
+)
+
 type AuthHandler struct {
 	register *appuser.RegisterUseCase
 	login    *appuser.LoginUseCase
