@@ -10,49 +10,42 @@ import (
 	domain "Lullify_Backend/internal/domain/stream"
 )
 
-// Vérifie qu'un stream démarre et s'arrête proprement.
 func TestEngine_StartAndStop(t *testing.T) {
 	engine := NewStreamEngine()
 	streamID := uuid.New()
 	ctx := context.Background()
 
-	if err := engine.Start(ctx, streamID); err != nil {
+	if err := engine.Start(ctx, streamID, ""); err != nil {
 		t.Fatalf("expected no error on Start, got %v", err)
 	}
-
 	if !engine.IsRunning(streamID) {
 		t.Fatal("expected stream to be running after Start")
 	}
-
 	if err := engine.Stop(streamID); err != nil {
 		t.Fatalf("expected no error on Stop, got %v", err)
 	}
-
 	time.Sleep(50 * time.Millisecond)
-
 	if engine.IsRunning(streamID) {
 		t.Fatal("expected stream to be stopped after Stop")
 	}
 }
 
-// Vérifie qu'on ne peut pas démarrer deux fois le même stream.
 func TestEngine_StartAlreadyLive(t *testing.T) {
 	engine := NewStreamEngine()
 	streamID := uuid.New()
 	ctx := context.Background()
 
-	if err := engine.Start(ctx, streamID); err != nil {
+	if err := engine.Start(ctx, streamID, ""); err != nil {
 		t.Fatalf("expected no error on first Start, got %v", err)
 	}
-	defer engine.Stop(streamID)
+	defer engine.Stop(streamID) //nolint:errcheck
 
-	err := engine.Start(ctx, streamID)
+	err := engine.Start(ctx, streamID, "")
 	if err != domain.ErrStreamAlreadyLive {
 		t.Fatalf("expected ErrStreamAlreadyLive, got %v", err)
 	}
 }
 
-// Vérifie qu'on ne peut pas arrêter un stream inexistant.
 func TestEngine_StopNotLive(t *testing.T) {
 	engine := NewStreamEngine()
 	streamID := uuid.New()
@@ -63,16 +56,14 @@ func TestEngine_StopNotLive(t *testing.T) {
 	}
 }
 
-// Vérifie que l'annulation du context arrête bien le stream.
 func TestEngine_ContextCancellation(t *testing.T) {
 	engine := NewStreamEngine()
 	streamID := uuid.New()
 	ctx, cancel := context.WithCancel(context.Background())
 
-	if err := engine.Start(ctx, streamID); err != nil {
+	if err := engine.Start(ctx, streamID, ""); err != nil {
 		t.Fatalf("expected no error on Start, got %v", err)
 	}
-
 	if !engine.IsRunning(streamID) {
 		t.Fatal("expected stream to be running")
 	}
@@ -85,16 +76,15 @@ func TestEngine_ContextCancellation(t *testing.T) {
 	}
 }
 
-// Vérifie qu'un auditeur peut s'abonner et se désabonner sans crash.
 func TestEngine_SubscribeUnsubscribe(t *testing.T) {
 	engine := NewStreamEngine()
 	streamID := uuid.New()
 	ctx := context.Background()
 
-	if err := engine.Start(ctx, streamID); err != nil {
+	if err := engine.Start(ctx, streamID, ""); err != nil {
 		t.Fatalf("expected no error on Start, got %v", err)
 	}
-	defer engine.Stop(streamID)
+	defer engine.Stop(streamID) //nolint:errcheck
 
 	ch, err := engine.Subscribe(streamID)
 	if err != nil {
@@ -107,7 +97,6 @@ func TestEngine_SubscribeUnsubscribe(t *testing.T) {
 	engine.Unsubscribe(streamID, ch)
 }
 
-// Vérifie qu'on ne peut pas s'abonner à un stream qui ne tourne pas.
 func TestEngine_SubscribeToNonExistentStream(t *testing.T) {
 	engine := NewStreamEngine()
 	streamID := uuid.New()

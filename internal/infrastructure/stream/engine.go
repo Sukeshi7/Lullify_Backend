@@ -50,7 +50,7 @@ func NewStreamEngine() *Engine {
 	}
 }
 
-func (e *Engine) Start(ctx context.Context, streamID uuid.UUID) error {
+func (e *Engine) Start(ctx context.Context, streamID uuid.UUID, audioFilePath string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -66,9 +66,10 @@ func (e *Engine) Start(ctx context.Context, streamID uuid.UUID) error {
 	sessionCtx, cancel := context.WithCancel(ctx)
 
 	session := &streamSession{
-		cancel:      cancel,
-		segmenter:   segmenter,
-		subscribers: make(map[<-chan domain.Chunk]chan domain.Chunk),
+		cancel:        cancel,
+		segmenter:     segmenter,
+		audioFilePath: audioFilePath,
+		subscribers:   make(map[<-chan domain.Chunk]chan domain.Chunk),
 	}
 
 	e.sessions[streamID] = session
@@ -112,7 +113,6 @@ func (e *Engine) produce(ctx context.Context, streamID uuid.UUID, session *strea
 				Msg("transcoder error")
 		}
 	} else {
-		// Pas de fichier audio — attend l'annulation du context
 		<-ctx.Done()
 	}
 }
@@ -185,21 +185,4 @@ func (e *Engine) GetSegmenter(streamID uuid.UUID) (*HLSSegmenter, error) {
 		return nil, domain.ErrStreamNotLive
 	}
 	return session.segmenter, nil
-}
-
-// SetAudioFile associe un fichier audio local à un stream actif
-func (e *Engine) SetAudioFile(streamID uuid.UUID, filePath string) error {
-	e.mu.RLock()
-	session, exists := e.sessions[streamID]
-	e.mu.RUnlock()
-
-	if !exists {
-		return domain.ErrStreamNotLive
-	}
-
-	session.mu.Lock()
-	session.audioFilePath = filePath
-	session.mu.Unlock()
-
-	return nil
 }
