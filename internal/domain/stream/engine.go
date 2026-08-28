@@ -9,10 +9,9 @@ import (
 type Chunk []byte
 
 type Engine interface {
-	Start(ctx context.Context, streamID uuid.UUID) error
+	Start(ctx context.Context, streamID uuid.UUID, audioFilePath string) error
 	Stop(streamID uuid.UUID) error
 	Subscribe(streamID uuid.UUID) (<-chan Chunk, error)
 	Unsubscribe(streamID uuid.UUID, ch <-chan Chunk)
 	IsRunning(streamID uuid.UUID) bool
-	SetAudioFile(streamID uuid.UUID, filePath string) error
 }
