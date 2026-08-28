@@ -50,6 +50,37 @@ func (m *mockRepo) FindByID(_ context.Context, id uuid.UUID) (*user.User, error)
 	return nil, nil
 }
 
+func (m *mockRepo) FindAll(_ context.Context) ([]*user.User, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.users, nil
+}
+
+func (m *mockRepo) DeleteByID(_ context.Context, id uuid.UUID) error {
+	return m.err
+}
+
+func (m *mockRepo) CountAll(_ context.Context) (int, error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+	return len(m.users), nil
+}
+
+func (m *mockRepo) CountByRole(_ context.Context, role user.Role) (int, error) {
+	if m.err != nil {
+		return 0, m.err
+	}
+	n := 0
+	for _, u := range m.users {
+		if u.Role == role {
+			n++
+		}
+	}
+	return n, nil
+}
+
 // --- Register tests ---
 
 func TestRegister_Success(t *testing.T) {
