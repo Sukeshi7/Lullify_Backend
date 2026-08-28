@@ -25,7 +25,7 @@ func (h *HealthHandler) Routes(mux *http.ServeMux) {
 }
 
 func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeJSON(w, http.StatusOK, map[string]string{fieldStatus: "ok"})
 }
 
 func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +57,7 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, status, map[string]any{
-		"status": overall,
-		"checks": checks,
+		fieldStatus: overall,
+		"checks":    checks,
 	})
 }
