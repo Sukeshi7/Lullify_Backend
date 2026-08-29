@@ -30,6 +30,9 @@ type Config struct {
 	MaxUploadSizeBytes int64
 
 	CORSAllowedOrigins []string
+
+	RateLimitRPS   float64
+	RateLimitBurst int
 }
 
 func Load() *Config {
@@ -56,6 +59,9 @@ func Load() *Config {
 		MaxUploadSizeBytes: parseInt64(getEnv("MAX_UPLOAD_SIZE_BYTES", "52428800")),
 
 		CORSAllowedOrigins: parseCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
+
+		RateLimitRPS:   parseFloat(getEnv("RATE_LIMIT_RPS", "1")),
+		RateLimitBurst: parseInt(getEnv("RATE_LIMIT_BURST", "5")),
 	}
 }
 
@@ -99,4 +105,20 @@ func parseCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+func parseFloat(s string) float64 {
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 1
+	}
+	return f
+}
+
+func parseInt(s string) int {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return 5
+	}
+	return n
 }

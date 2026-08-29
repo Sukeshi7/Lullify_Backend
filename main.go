@@ -78,6 +78,7 @@ func main() {
 	// ── Services ───────────────────────────────────────
 	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
 	streamEngine := infrastream.NewStreamEngine()
+	rateLimiter := httphandler.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
 
 	// ── Use cases ──────────────────────────────────────
 	registerUC := appuser.NewRegisterUseCase(userRepo)
@@ -93,7 +94,7 @@ func main() {
 	listFavoritesUC := appfavorite.NewListUseCase(favoriteRepo)
 
 	// ── Handlers ───────────────────────────────────────
-	authHandler := httphandler.NewAuthHandler(registerUC, loginUC, userRepo, jwtService)
+	authHandler := httphandler.NewAuthHandler(registerUC, loginUC, userRepo, jwtService, rateLimiter)
 	streamHandler := httphandler.NewStreamHandler(
 		createStreamUC,
 		startStreamUC,
