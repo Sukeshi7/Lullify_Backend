@@ -119,6 +119,7 @@ func main() {
 		favoriteHandler,
 		adminHandler,
 		healthHandler,
+		cfg.CORSAllowedOrigins,
 	)
 
 	// ── Start server ───────────────────────────────────
