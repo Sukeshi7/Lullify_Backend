@@ -20,15 +20,16 @@ type AuthHandler struct {
 	login    *appuser.LoginUseCase
 	users    user.Repository
 	tokens   *token.JWTService
+	limiter  *RateLimiter
 }
 
-func NewAuthHandler(r *appuser.RegisterUseCase, l *appuser.LoginUseCase, users user.Repository, t *token.JWTService) *AuthHandler {
-	return &AuthHandler{register: r, login: l, users: users, tokens: t}
+func NewAuthHandler(r *appuser.RegisterUseCase, l *appuser.LoginUseCase, users user.Repository, t *token.JWTService, limiter *RateLimiter) *AuthHandler {
+	return &AuthHandler{register: r, login: l, users: users, tokens: t, limiter: limiter}
 }
 
 func (h *AuthHandler) Routes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/auth/register", h.Register)
-	mux.HandleFunc("POST /api/v1/auth/login", h.Login)
+	mux.Handle("POST /api/v1/auth/register", h.limiter.Middleware(http.HandlerFunc(h.Register)))
+	mux.Handle("POST /api/v1/auth/login", h.limiter.Middleware(http.HandlerFunc(h.Login)))
 	mux.HandleFunc("POST /api/v1/auth/refresh", h.Refresh)
 	mux.HandleFunc("POST /api/v1/auth/logout", h.Logout)
 }
