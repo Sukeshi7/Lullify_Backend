@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,6 +28,8 @@ type Config struct {
 	MinIOUseSSL    bool
 
 	MaxUploadSizeBytes int64
+
+	CORSAllowedOrigins []string
 }
 
 func Load() *Config {
@@ -51,6 +54,8 @@ func Load() *Config {
 		MinIOUseSSL:    parseBool(getEnv("MINIO_USE_SSL", "false")),
 
 		MaxUploadSizeBytes: parseInt64(getEnv("MAX_UPLOAD_SIZE_BYTES", "52428800")),
+
+		CORSAllowedOrigins: parseCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
 	}
 }
 
@@ -83,4 +88,15 @@ func parseInt64(s string) int64 {
 		return 52428800
 	}
 	return n
+}
+
+func parseCSV(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
