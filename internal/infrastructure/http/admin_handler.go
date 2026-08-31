@@ -139,3 +139,13 @@ func userToAdminJSON(u *user.User) map[string]any {
 		"updated_at": u.UpdatedAt.Format(time.RFC3339),
 	}
 }
+
+// MetricsMiddleware protège un handler avec une vérification admin
+func (h *AdminHandler) MetricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := h.requireAdmin(w, r); !ok {
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
