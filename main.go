@@ -84,7 +84,7 @@ func main() {
 	registerUC := appuser.NewRegisterUseCase(userRepo)
 	loginUC := appuser.NewLoginUseCase(userRepo)
 	createStreamUC := appstream.NewCreateUseCase(streamRepo)
-	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine, redisClient)
+	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine, redisClient, trackRepo, cfg.StoragePath)		
 	stopStreamUC := appstream.NewStopUseCase(streamRepo, streamEngine)
 	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, objectStorage, cfg.MaxUploadSizeBytes)
 	recordHistoryUC := apphistory.NewRecordUseCase(historyRepo)

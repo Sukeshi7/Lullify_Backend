@@ -6,6 +6,7 @@ import (
 
 	"Lullify_Backend/internal/domain/stream"
 	"Lullify_Backend/internal/infrastructure/observability"
+	"Lullify_Backend/internal/infrastructure/postgres"
 	"Lullify_Backend/internal/infrastructure/redis"
 
 	"github.com/google/uuid"
@@ -17,13 +18,15 @@ type StartInput struct {
 }
 
 type StartUseCase struct {
-	repo   stream.Repository
-	engine stream.Engine
-	queue  *redis.Client
+	repo        stream.Repository
+	engine      stream.Engine
+	queue       *redis.Client
+	tracks      *postgres.TrackRepository
+	storagePath string
 }
 
-func NewStartUseCase(repo stream.Repository, engine stream.Engine, queue *redis.Client) *StartUseCase {
-	return &StartUseCase{repo: repo, engine: engine, queue: queue}
+func NewStartUseCase(repo stream.Repository, engine stream.Engine, queue *redis.Client, tracks *postgres.TrackRepository, storagePath string) *StartUseCase {
+	return &StartUseCase{repo: repo, engine: engine, queue: queue, tracks: tracks, storagePath: storagePath}
 }
 
 func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
@@ -39,6 +42,17 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 	}
 	if s.IsLive() {
 		return stream.ErrStreamAlreadyLive
+	}
+
+	// Alimente la queue avec la dernière track uploadée par le propriétaire,
+	// pour que le moteur ait un fichier à diffuser.
+	if track, terr := uc.tracks.FindLatestByUploader(ctx, input.OwnerID); terr == nil && track != nil {
+		_ = uc.queue.Push(ctx, input.StreamID.String(), redis.TrackJob{
+			TrackID:  track.ID.String(),
+			FilePath: uc.storagePath + "/" + track.FilePath,
+			Title:    track.Title,
+			Artist:   track.Artist,
+		})
 	}
 
 	// Pop la track AVANT de démarrer — zéro race condition
