@@ -16,6 +16,7 @@ type RegisterInput struct {
 	Username string
 	Email    string
 	Password string
+	Role     user.Role
 }
 
 type RegisterUseCase struct {
@@ -63,13 +64,19 @@ func (uc *RegisterUseCase) Execute(ctx context.Context, input RegisterInput) (*u
 		return nil, fmt.Errorf("hashing password: %w", err)
 	}
 
+	// Par défaut user, broadcaster si demandé, jamais admin via register
+	role := user.RoleUser
+	if input.Role == user.RoleBroadcaster {
+		role = user.RoleBroadcaster
+	}
+
 	now := time.Now().UTC()
 	u := &user.User{
 		ID:           uuid.New(),
 		Username:     strings.TrimSpace(input.Username),
 		Email:        strings.TrimSpace(input.Email),
 		PasswordHash: string(hash),
-		Role:         user.RoleUser,
+		Role:         role,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
