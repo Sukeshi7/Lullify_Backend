@@ -263,18 +263,6 @@ func (h *StreamHandler) requireAuth(w http.ResponseWriter, r *http.Request) (*to
 	return claims, true
 }
 
-func (h *StreamHandler) ownerIDFromRequest(r *http.Request) (uuid.UUID, error) {
-	authHeader := r.Header.Get("Authorization")
-	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		return uuid.Nil, errors.New("missing token")
-	}
-	claims, err := h.tokens.ParseAccess(authHeader[7:])
-	if err != nil {
-		return uuid.Nil, err
-	}
-	return claims.UserID, nil
-}
-
 func (h *StreamHandler) streamsToJSON(streams []*stream.Stream) []map[string]any {
 	result := make([]map[string]any, 0, len(streams))
 	for _, s := range streams {
