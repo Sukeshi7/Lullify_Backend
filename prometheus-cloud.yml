@@ -6,4 +6,4 @@ scrape_configs:
       static_configs:
           - targets: ["lullifybackend-dev.up.railway.app"]
       scheme: https
-      metrics_path: /metrics
+      metrics_path: /metrics-xk9p2q7m
