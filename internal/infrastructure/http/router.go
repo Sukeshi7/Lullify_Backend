@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"os"
 
 	"Lullify_Backend/internal/infrastructure/observability"
 )
@@ -27,16 +28,17 @@ func NewRouter(
 	admin.Routes(mux)
 	health.Routes(mux)
 
-	// /metrics — endpoint Prometheus
+	// /metrics — protégé admin
 	mux.Handle("GET /metrics", admin.MetricsMiddleware(observability.MetricsHandler()))
 
-	// Chaîne de middlewares : CORS → OTEL (traces + logs + métriques)
+	// Path secret pour Prometheus scraping (sans auth, path non documenté)
+	if secretPath := os.Getenv("METRICS_SECRET_PATH"); secretPath != "" {
+		mux.Handle("GET "+secretPath, observability.MetricsHandler())
+	}
+
 	return corsMiddleware(allowedOrigins)(observability.OtelMiddleware(mux))
 }
 
-// corsMiddleware restricts cross-origin access to a whitelist of origins.
-// Instead of a wildcard "*", it echoes back the request Origin only when it's
-// explicitly allowed, which also lets us send credentials (cookies/Authorization).
 func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	allowed := make(map[string]bool, len(allowedOrigins))
 	for _, o := range allowedOrigins {
