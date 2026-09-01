@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"Lullify_Backend/internal/domain/favorite"
-	"github.com/google/uuid"
 )
 
 func TestFavoriteErrors(t *testing.T) {
@@ -22,15 +21,8 @@ func TestFavoriteErrors(t *testing.T) {
 	}
 }
 
-func TestFavorite_IDs(t *testing.T) {
-	id := uuid.New()
-	userID := uuid.New()
-	streamID := uuid.New()
-
-	if id == userID {
-		t.Error("expected different UUIDs")
-	}
-	if userID == streamID {
-		t.Error("expected different UUIDs")
+func TestFavoriteErrors_Distinct(t *testing.T) {
+	if favorite.ErrAlreadyFavorited == favorite.ErrFavoriteNotFound {
+		t.Error("expected distinct errors")
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"Lullify_Backend/internal/domain/history"
-	"github.com/google/uuid"
 )
 
 func TestHistoryError(t *testing.T) {
@@ -16,15 +15,8 @@ func TestHistoryError(t *testing.T) {
 	}
 }
 
-func TestEntry_StreamID_Optional(t *testing.T) {
-	e := &history.Entry{}
-	if e.StreamID != nil {
-		t.Error("expected StreamID to be nil by default")
-	}
-
-	streamID := uuid.New()
-	e.StreamID = &streamID
-	if e.StreamID == nil {
-		t.Error("expected StreamID to be set")
+func TestHistoryError_Message(t *testing.T) {
+	if history.ErrEmptyTitle.Error() != "track title is required" {
+		t.Errorf("unexpected error message: %s", history.ErrEmptyTitle.Error())
 	}
 }
