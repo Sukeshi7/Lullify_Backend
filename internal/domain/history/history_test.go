@@ -58,10 +58,7 @@ func TestEntry_Fields(t *testing.T) {
 
 func TestEntry_NoStreamID(t *testing.T) {
 	e := history.Entry{
-		ID:         uuid.New(),
-		UserID:     uuid.New(),
 		TrackTitle: "Track",
-		PlayedAt:   time.Now(),
 	}
 
 	if e.StreamID != nil {
