@@ -28,19 +28,18 @@ func TestMain(m *testing.M) {
 
 	ctx := context.Background()
 
-	var err error
-	testDB, err = pgxpool.New(ctx, dbURL)
-	if err != nil {
-		// Skip all integration tests if DB not available
+	var setupErr error
+	testDB, setupErr = pgxpool.New(ctx, dbURL)
+	if setupErr != nil {
 		os.Exit(0)
 	}
 
-	if err := testDB.Ping(ctx); err != nil {
+	if pingErr := testDB.Ping(ctx); pingErr != nil {
 		os.Exit(0)
 	}
 
-	testRedis, err = infraredis.NewClient(redisURL)
-	if err != nil {
+	testRedis, setupErr = infraredis.NewClient(redisURL)
+	if setupErr != nil {
 		os.Exit(0)
 	}
 

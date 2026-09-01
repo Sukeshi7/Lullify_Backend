@@ -1,7 +1,6 @@
 package http
 
 import (
-	"Lullify_Backend/internal/infrastructure/observability"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +12,7 @@ import (
 	"Lullify_Backend/internal/domain/history"
 	"Lullify_Backend/internal/domain/stream"
 	"Lullify_Backend/internal/domain/user"
+	"Lullify_Backend/internal/infrastructure/observability"
 )
 
 func TestWriteJSON(t *testing.T) {

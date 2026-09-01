@@ -15,13 +15,13 @@ func TestHLSSegmenter_WriteAndPlaylist(t *testing.T) {
 	defer segmenter.Cleanup() //nolint:errcheck
 
 	data := make([]byte, 1024)
-	if err := segmenter.WriteSegment(data); err != nil {
-		t.Fatalf("expected no error writing segment, got %v", err)
+	if writeErr := segmenter.WriteSegment(data); writeErr != nil {
+		t.Fatalf("expected no error writing segment, got %v", writeErr)
 	}
 
-	playlist, err := segmenter.Playlist()
-	if err != nil {
-		t.Fatalf("expected no error reading playlist, got %v", err)
+	playlist, playlistErr := segmenter.Playlist()
+	if playlistErr != nil {
+		t.Fatalf("expected no error reading playlist, got %v", playlistErr)
 	}
 	if len(playlist) == 0 {
 		t.Error("expected non-empty playlist")
@@ -42,14 +42,14 @@ func TestHLSSegmenter_RollingWindow(t *testing.T) {
 
 	data := make([]byte, 512)
 	for i := 0; i < 8; i++ {
-		if err := segmenter.WriteSegment(data); err != nil {
-			t.Fatalf("error writing segment %d: %v", i, err)
+		if writeErr := segmenter.WriteSegment(data); writeErr != nil {
+			t.Fatalf("error writing segment %d: %v", i, writeErr)
 		}
 	}
 
-	playlist, err := segmenter.Playlist()
-	if err != nil {
-		t.Fatalf("expected no error reading playlist, got %v", err)
+	playlist, playlistErr := segmenter.Playlist()
+	if playlistErr != nil {
+		t.Fatalf("expected no error reading playlist, got %v", playlistErr)
 	}
 
 	count := 0
@@ -73,8 +73,8 @@ func TestHLSSegmenter_Cleanup(t *testing.T) {
 	data := make([]byte, 512)
 	_ = segmenter.WriteSegment(data)
 
-	if err := segmenter.Cleanup(); err != nil {
-		t.Fatalf("expected no error on cleanup, got %v", err)
+	if cleanupErr := segmenter.Cleanup(); cleanupErr != nil {
+		t.Fatalf("expected no error on cleanup, got %v", cleanupErr)
 	}
 
 	_, statErr := os.Stat("/tmp/lullify/" + id.String())

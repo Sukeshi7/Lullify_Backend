@@ -10,10 +10,9 @@ import (
 )
 
 func TestTranscodeFile_Success(t *testing.T) {
-	// Crée un fichier audio factice
 	tmpDir := t.TempDir()
 	audioPath := filepath.Join(tmpDir, "test.mp3")
-	data := make([]byte, chunkSize*3) // 3 chunks
+	data := make([]byte, chunkSize*3)
 	if err := os.WriteFile(audioPath, data, 0644); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
@@ -25,8 +24,6 @@ func TestTranscodeFile_Success(t *testing.T) {
 	defer segmenter.Cleanup() //nolint:errcheck
 
 	transcoder := NewTranscoder(segmenter)
-
-	// Context annulé après le premier segment
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error)
@@ -34,12 +31,9 @@ func TestTranscodeFile_Success(t *testing.T) {
 		done <- transcoder.TranscodeFile(ctx, audioPath)
 	}()
 
-	// Annule après un court délai
 	cancel()
-	err = <-done
-
-	if err != nil {
-		t.Fatalf("expected no error on cancelled context, got %v", err)
+	if transcodeErr := <-done; transcodeErr != nil {
+		t.Fatalf("expected no error on canceled context, got %v", transcodeErr)
 	}
 }
 
@@ -51,9 +45,7 @@ func TestTranscodeFile_FileNotFound(t *testing.T) {
 	defer segmenter.Cleanup() //nolint:errcheck
 
 	transcoder := NewTranscoder(segmenter)
-	err = transcoder.TranscodeFile(context.Background(), "/nonexistent/file.mp3")
-
-	if err == nil {
+	if transcodeErr := transcoder.TranscodeFile(context.Background(), "/nonexistent/file.mp3"); transcodeErr == nil {
 		t.Fatal("expected error for non-existent file, got nil")
 	}
 }
@@ -65,8 +57,7 @@ func TestNewTranscoder(t *testing.T) {
 	}
 	defer segmenter.Cleanup() //nolint:errcheck
 
-	transcoder := NewTranscoder(segmenter)
-	if transcoder == nil {
+	if transcoder := NewTranscoder(segmenter); transcoder == nil {
 		t.Fatal("expected non-nil transcoder")
 	}
 }
@@ -93,10 +84,9 @@ func TestTranscodeFile_MultipleChunks(t *testing.T) {
 		done <- transcoder.TranscodeFile(ctx, audioPath)
 	}()
 
-	// Laisse lire quelques chunks puis annule
 	cancel()
-	if err := <-done; err != nil {
-		t.Fatalf("expected no error, got %v", err)
+	if transcodeErr := <-done; transcodeErr != nil {
+		t.Fatalf("expected no error, got %v", transcodeErr)
 	}
 }
 
@@ -115,10 +105,9 @@ func TestTranscodeFile_EmptyFile(t *testing.T) {
 
 	transcoder := NewTranscoder(segmenter)
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // annule immédiatement
+	cancel()
 
-	err = transcoder.TranscodeFile(ctx, audioPath)
-	if err != nil {
-		t.Fatalf("expected no error on empty file with cancelled ctx, got %v", err)
+	if transcodeErr := transcoder.TranscodeFile(ctx, audioPath); transcodeErr != nil {
+		t.Fatalf("expected no error on empty file with canceled ctx, got %v", transcodeErr)
 	}
 }
