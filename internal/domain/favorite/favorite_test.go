@@ -9,13 +9,31 @@ import (
 	"Lullify_Backend/internal/domain/favorite"
 )
 
+func TestFavoriteErrors(t *testing.T) {
+	if favorite.ErrAlreadyFavorited == nil {
+		t.Error("expected ErrAlreadyFavorited to be non-nil")
+	}
+	if favorite.ErrFavoriteNotFound == nil {
+		t.Error("expected ErrFavoriteNotFound to be non-nil")
+	}
+	if favorite.ErrAlreadyFavorited.Error() == "" {
+		t.Error("expected non-empty error message")
+	}
+	if favorite.ErrFavoriteNotFound.Error() == "" {
+		t.Error("expected non-empty error message")
+	}
+	if favorite.ErrAlreadyFavorited == favorite.ErrFavoriteNotFound {
+		t.Error("expected distinct errors")
+	}
+}
+
 func TestFavorite_Fields(t *testing.T) {
 	id := uuid.New()
 	userID := uuid.New()
 	streamID := uuid.New()
 	now := time.Now()
 
-	f := &favorite.Favorite{
+	f := favorite.Favorite{
 		ID:        id,
 		UserID:    userID,
 		StreamID:  streamID,
@@ -31,19 +49,7 @@ func TestFavorite_Fields(t *testing.T) {
 	if f.StreamID != streamID {
 		t.Errorf("expected StreamID %s, got %s", streamID, f.StreamID)
 	}
-}
-
-func TestFavoriteErrors(t *testing.T) {
-	if favorite.ErrAlreadyFavorited == nil {
-		t.Error("expected ErrAlreadyFavorited to be non-nil")
-	}
-	if favorite.ErrFavoriteNotFound == nil {
-		t.Error("expected ErrFavoriteNotFound to be non-nil")
-	}
-	if favorite.ErrAlreadyFavorited.Error() == "" {
-		t.Error("expected non-empty error message")
-	}
-	if favorite.ErrFavoriteNotFound.Error() == "" {
-		t.Error("expected non-empty error message")
+	if f.CreatedAt != now {
+		t.Error("expected CreatedAt to be set")
 	}
 }
