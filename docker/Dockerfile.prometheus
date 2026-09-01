@@ -1,0 +1,3 @@
+FROM prom/prometheus:v2.52.0
+COPY prometheus-cloud.yml /etc/prometheus/prometheus.yml
+CMD ["--config.file=/etc/prometheus/prometheus.yml", "--web.listen-address=:9090"]
