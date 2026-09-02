@@ -1,20 +1,131 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"net/http"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"Lullify_Backend/config"
+	appfavorite "Lullify_Backend/internal/application/favorite"
+	apphistory "Lullify_Backend/internal/application/history"
+	appstream "Lullify_Backend/internal/application/stream"
+	apptrack "Lullify_Backend/internal/application/track"
+	appuser "Lullify_Backend/internal/application/user"
+	httphandler "Lullify_Backend/internal/infrastructure/http"
+	"Lullify_Backend/internal/infrastructure/observability"
+	"Lullify_Backend/internal/infrastructure/postgres"
+	infraredis "Lullify_Backend/internal/infrastructure/redis"
+	"Lullify_Backend/internal/infrastructure/storage"
+	infrastream "Lullify_Backend/internal/infrastructure/stream"
+	"Lullify_Backend/internal/infrastructure/token"
 )
 
-//TIP <p>To run your code, right-click the code and select <b>Run</b>.</p> <p>Alternatively, click
-// the <icon src="AllIcons.Actions.Execute"/> icon in the gutter and select the <b>Run</b> menu item from here.</p>
 func main() {
-	//TIP <p>Press <shortcut actionId="ShowIntentionActions"/> when your caret is at the underlined text
-	// to see how GoLand suggests fixing the warning.</p><p>Alternatively, if available, click the lightbulb to view possible fixes.</p>
-	s := "gopher"
-	fmt.Printf("Hello and welcome, %s!\n", s)
+	cfg := config.Load()
 
-	for i := 1; i <= 5; i++ {
-		//TIP <p>To start your debugging session, right-click your code in the editor and select the Debug option.</p> <p>We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-		// for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.</p>
-		fmt.Println("i =", 100/i)
+	// ── Logger ─────────────────────────────────────────
+	observability.InitLogger(cfg.OTELServiceName)
+
+	// ── OTEL Tracer ────────────────────────────────────
+	ctx := context.Background()
+	shutdownTracer, err := observability.InitTracer(ctx, cfg.OTELServiceName, cfg.OTELEndpoint)
+	if err != nil {
+		observability.Logger.Fatal().Err(err).Msg("cannot initialize tracer")
+	}
+	defer func() {
+		if shutdownErr := shutdownTracer(ctx); shutdownErr != nil {
+			observability.Logger.Error().Err(shutdownErr).Msg("tracer shutdown error")
+		}
+	}()
+
+	// ── PostgreSQL ─────────────────────────────────────
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	if err != nil {
+		observability.Logger.Fatal().Err(err).Msg("cannot connect to database")
+	}
+	defer pool.Close()
+
+	// ── Redis ──────────────────────────────────────────
+	redisClient, err := infraredis.NewClient(cfg.RedisURL)
+	if err != nil {
+		observability.Logger.Fatal().Err(err).Msg("cannot connect to redis")
+	}
+	defer func() { _ = redisClient.Close() }()
+
+	// ── Storage ────────────────────────────────────────
+	objectStorage, err := storage.New(storage.Options{
+		Provider:  cfg.StorageProvider,
+		LocalPath: cfg.StoragePath,
+		Endpoint:  cfg.MinIOEndpoint,
+		AccessKey: cfg.MinIOAccessKey,
+		SecretKey: cfg.MinIOSecretKey,
+		Bucket:    cfg.MinIOBucket,
+		UseSSL:    cfg.MinIOUseSSL,
+	})
+	if err != nil {
+		observability.Logger.Fatal().Err(err).Msg("cannot initialize object storage")
+	}
+
+	// ── Repositories ───────────────────────────────────
+	userRepo := postgres.NewUserRepository(pool)
+	streamRepo := postgres.NewStreamRepository(pool)
+	playlistRepo := postgres.NewPlaylistRepository(pool)
+	trackRepo := postgres.NewTrackRepository(pool)
+	historyRepo := postgres.NewHistoryRepository(pool)
+	favoriteRepo := postgres.NewFavoriteRepository(pool)
+
+	// ── Services ───────────────────────────────────────
+	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
+	streamEngine := infrastream.NewStreamEngine()
+	rateLimiter := httphandler.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
+
+	// ── Use cases ──────────────────────────────────────
+	registerUC := appuser.NewRegisterUseCase(userRepo)
+	loginUC := appuser.NewLoginUseCase(userRepo)
+	createStreamUC := appstream.NewCreateUseCase(streamRepo)
+	startStreamUC := appstream.NewStartUseCase(streamRepo, streamEngine, redisClient, trackRepo, cfg.StoragePath)
+	stopStreamUC := appstream.NewStopUseCase(streamRepo, streamEngine)
+	uploadTrackUC := apptrack.NewUploadUseCase(trackRepo, playlistRepo, objectStorage, cfg.MaxUploadSizeBytes)
+	recordHistoryUC := apphistory.NewRecordUseCase(historyRepo)
+	listHistoryUC := apphistory.NewListUseCase(historyRepo)
+	addFavoriteUC := appfavorite.NewAddUseCase(favoriteRepo)
+	removeFavoriteUC := appfavorite.NewRemoveUseCase(favoriteRepo)
+	listFavoritesUC := appfavorite.NewListUseCase(favoriteRepo)
+
+	// ── Handlers ───────────────────────────────────────
+	authHandler := httphandler.NewAuthHandler(registerUC, loginUC, userRepo, jwtService, rateLimiter)
+	streamHandler := httphandler.NewStreamHandler(
+		createStreamUC,
+		startStreamUC,
+		stopStreamUC,
+		streamRepo,
+		jwtService,
+		streamEngine,
+	)
+	playlistHandler := httphandler.NewPlaylistHandler(playlistRepo, trackRepo, jwtService)
+	trackHandler := httphandler.NewTrackHandler(uploadTrackUC, jwtService, cfg.MaxUploadSizeBytes)
+	historyHandler := httphandler.NewHistoryHandler(recordHistoryUC, listHistoryUC, jwtService)
+	favoriteHandler := httphandler.NewFavoriteHandler(addFavoriteUC, removeFavoriteUC, listFavoritesUC, jwtService)
+	adminHandler := httphandler.NewAdminHandler(userRepo, jwtService)
+	healthHandler := httphandler.NewHealthHandler(pool, redisClient)
+
+	// ── Router ─────────────────────────────────────────
+	router := httphandler.NewRouter(
+		authHandler,
+		streamHandler,
+		playlistHandler,
+		trackHandler,
+		historyHandler,
+		favoriteHandler,
+		adminHandler,
+		healthHandler,
+		cfg.CORSAllowedOrigins,
+	)
+
+	// ── Start server ───────────────────────────────────
+	observability.Logger.Info().Str("port", cfg.Port).Msg("Lullify listening")
+	if err := http.ListenAndServe(":"+cfg.Port, router); err != nil {
+		observability.Logger.Fatal().Err(err).Msg("server error")
 	}
 }

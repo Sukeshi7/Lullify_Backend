@@ -1,0 +1,86 @@
+# ---------- Secrets & env ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# ---------- Go ----------
+# Binaires compilés
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+main
+# Fichiers de test
+*.test
+*.out
+coverage.txt
+coverage.html
+# Go workspace
+go.work
+go.work.sum
+# Vendor (décommente si tu ne versionnes pas vendor/)
+# vendor/
+
+# ---------- Flutter / Dart ----------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+*.iml
+*.class
+*.lock
+!pubspec.lock
+# Android
+android/.gradle/
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/local.properties
+android/key.properties
+*.jks
+*.keystore
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Runner/GeneratedPluginRegistrant.*
+*.mobileprovision
+# Web
+lib/generated_plugin_registrant.dart
+
+# ---------- Docker ----------
+*.env.docker
+docker-compose.override.yml
+
+# ---------- IDE / Éditeurs ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---------- OS ----------
+.DS_Store
+**/.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Node (résidus) ----------
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# ---------- Logs & temp ----------
+*.log
+tmp/
+temp/

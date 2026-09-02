@@ -1,0 +1,52 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - misspell
+    - unconvert
+    - goconst
+    - prealloc
+    - revive
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    revive:
+      rules:
+        - name: unexported-return
+          severity: warning
+        - name: blank-imports
+          severity: warning
+    goconst:
+      min-len: 3
+      min-occurrences: 5
+    misspell:
+      locale: US
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - goconst
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - Lullify_Backend
