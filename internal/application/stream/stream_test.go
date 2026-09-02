@@ -127,6 +127,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 	if s == nil {
 		t.Fatal("expected stream, got nil")
+		return
 	}
 	if s.Title != "My Stream" {
 		t.Errorf("expected title 'My Stream', got %s", s.Title)

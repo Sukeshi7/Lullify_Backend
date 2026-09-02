@@ -33,6 +33,7 @@ func TestAuthFlow_RegisterAndLogin(t *testing.T) {
 	}
 	if u == nil {
 		t.Fatal("expected user, got nil")
+		return
 	}
 
 	// Login
