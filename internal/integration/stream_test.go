@@ -21,11 +21,12 @@ func TestStreamFlow_CreateAndStart(t *testing.T) {
 	ctx := context.Background()
 	userRepo := postgres.NewUserRepository(testDB)
 	streamRepo := postgres.NewStreamRepository(testDB)
+	trackRepo := postgres.NewTrackRepository(testDB)
 	engine := infrastream.NewStreamEngine()
 
 	registerUC := appuser.NewRegisterUseCase(userRepo)
 	createStreamUC := appstream.NewCreateUseCase(streamRepo)
-	startStreamUC := appstream.NewStartUseCase(streamRepo, engine, testRedis)
+	startStreamUC := appstream.NewStartUseCase(streamRepo, engine, testRedis, trackRepo, "")
 	stopStreamUC := appstream.NewStopUseCase(streamRepo, engine)
 
 	// Crée un utilisateur broadcaster

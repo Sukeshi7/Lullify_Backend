@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	appstream "Lullify_Backend/internal/application/stream"
+	"Lullify_Backend/internal/domain/playlist"
 	"Lullify_Backend/internal/domain/stream"
 	"Lullify_Backend/internal/infrastructure/observability"
 	"Lullify_Backend/internal/infrastructure/redis"
@@ -66,6 +67,25 @@ type mockQueue struct {
 func (m *mockQueue) Pop(ctx context.Context, streamID string) (*redis.TrackJob, error) {
 	return m.pop(ctx, streamID)
 }
+func (m *mockQueue) Push(ctx context.Context, streamID string, job redis.TrackJob) error {
+	return nil
+}
+
+type mockTrackFinder struct {
+	find func(ctx context.Context, uploaderID uuid.UUID) (*playlist.Track, error)
+}
+
+func (m *mockTrackFinder) FindLatestByUploader(ctx context.Context, uploaderID uuid.UUID) (*playlist.Track, error) {
+	if m.find == nil {
+		return nil, nil
+	}
+	return m.find(ctx, uploaderID)
+}
+
+// noTracks renvoie un TrackFinder qui ne trouve jamais de track (cas par défaut).
+func noTracks() appstream.TrackFinder {
+	return &mockTrackFinder{}
+}
 
 func newLiveStream(ownerID uuid.UUID) *stream.Stream {
 	return &stream.Stream{
@@ -107,6 +127,7 @@ func TestCreate_Success(t *testing.T) {
 	}
 	if s == nil {
 		t.Fatal("expected stream, got nil")
+		return
 	}
 	if s.Title != "My Stream" {
 		t.Errorf("expected title 'My Stream', got %s", s.Title)
@@ -254,7 +275,7 @@ func TestStart_Success(t *testing.T) {
 	}
 	queue := &mockQueue{pop: func(_ context.Context, _ string) (*redis.TrackJob, error) { return nil, nil }}
 
-	uc := appstream.NewStartUseCase(repo, engine, queue)
+	uc := appstream.NewStartUseCase(repo, engine, queue, noTracks(), "")
 	if err := uc.Execute(context.Background(), appstream.StartInput{StreamID: s.ID, OwnerID: ownerID}); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -278,7 +299,7 @@ func TestStart_Success_WithTrack(t *testing.T) {
 		},
 	}
 
-	uc := appstream.NewStartUseCase(repo, engine, queue)
+	uc := appstream.NewStartUseCase(repo, engine, queue, noTracks(), "")
 	if err := uc.Execute(context.Background(), appstream.StartInput{StreamID: s.ID, OwnerID: ownerID}); err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -302,7 +323,7 @@ func TestStart_QueueError(t *testing.T) {
 		},
 	}
 
-	uc := appstream.NewStartUseCase(repo, engine, queue)
+	uc := appstream.NewStartUseCase(repo, engine, queue, noTracks(), "")
 	if err := uc.Execute(context.Background(), appstream.StartInput{StreamID: s.ID, OwnerID: ownerID}); err != nil {
 		t.Fatalf("expected no error despite queue error, got %v", err)
 	}
@@ -313,7 +334,7 @@ func TestStart_NotFound(t *testing.T) {
 		findByID: func(_ context.Context, _ uuid.UUID) (*stream.Stream, error) { return nil, nil },
 	}
 	queue := &mockQueue{pop: func(_ context.Context, _ string) (*redis.TrackJob, error) { return nil, nil }}
-	uc := appstream.NewStartUseCase(repo, &mockEngine{}, queue)
+	uc := appstream.NewStartUseCase(repo, &mockEngine{}, queue, noTracks(), "")
 
 	err := uc.Execute(context.Background(), appstream.StartInput{StreamID: uuid.New(), OwnerID: uuid.New()})
 	if !errors.Is(err, stream.ErrStreamNotFound) {
@@ -327,7 +348,7 @@ func TestStart_NotOwner(t *testing.T) {
 		findByID: func(_ context.Context, _ uuid.UUID) (*stream.Stream, error) { return s, nil },
 	}
 	queue := &mockQueue{pop: func(_ context.Context, _ string) (*redis.TrackJob, error) { return nil, nil }}
-	uc := appstream.NewStartUseCase(repo, &mockEngine{}, queue)
+	uc := appstream.NewStartUseCase(repo, &mockEngine{}, queue, noTracks(), "")
 
 	err := uc.Execute(context.Background(), appstream.StartInput{StreamID: s.ID, OwnerID: uuid.New()})
 	if !errors.Is(err, stream.ErrNotStreamOwner) {
@@ -342,7 +363,7 @@ func TestStart_AlreadyLive(t *testing.T) {
 		findByID: func(_ context.Context, _ uuid.UUID) (*stream.Stream, error) { return s, nil },
 	}
 	queue := &mockQueue{pop: func(_ context.Context, _ string) (*redis.TrackJob, error) { return nil, nil }}
-	uc := appstream.NewStartUseCase(repo, &mockEngine{}, queue)
+	uc := appstream.NewStartUseCase(repo, &mockEngine{}, queue, noTracks(), "")
 
 	err := uc.Execute(context.Background(), appstream.StartInput{StreamID: s.ID, OwnerID: ownerID})
 	if !errors.Is(err, stream.ErrStreamAlreadyLive) {
@@ -362,7 +383,7 @@ func TestStart_EngineError(t *testing.T) {
 		stop:  func(_ uuid.UUID) error { return nil },
 	}
 	queue := &mockQueue{pop: func(_ context.Context, _ string) (*redis.TrackJob, error) { return nil, nil }}
-	uc := appstream.NewStartUseCase(repo, engine, queue)
+	uc := appstream.NewStartUseCase(repo, engine, queue, noTracks(), "")
 
 	err := uc.Execute(context.Background(), appstream.StartInput{StreamID: s.ID, OwnerID: ownerID})
 	if err == nil {
@@ -382,7 +403,7 @@ func TestStart_UpdateStatusError(t *testing.T) {
 		stop:  func(_ uuid.UUID) error { return nil },
 	}
 	queue := &mockQueue{pop: func(_ context.Context, _ string) (*redis.TrackJob, error) { return nil, nil }}
-	uc := appstream.NewStartUseCase(repo, engine, queue)
+	uc := appstream.NewStartUseCase(repo, engine, queue, noTracks(), "")
 
 	err := uc.Execute(context.Background(), appstream.StartInput{StreamID: s.ID, OwnerID: ownerID})
 	if err == nil {

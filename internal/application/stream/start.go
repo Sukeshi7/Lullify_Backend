@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"Lullify_Backend/internal/domain/playlist"
 	"Lullify_Backend/internal/domain/stream"
 	"Lullify_Backend/internal/infrastructure/observability"
 	"Lullify_Backend/internal/infrastructure/redis"
@@ -11,9 +12,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// Queue est l'interface minimale pour dépiler les tracks.
 type Queue interface {
 	Pop(ctx context.Context, streamID string) (*redis.TrackJob, error)
+	Push(ctx context.Context, streamID string, job redis.TrackJob) error
+}
+
+type TrackFinder interface {
+	FindLatestByUploader(ctx context.Context, uploaderID uuid.UUID) (*playlist.Track, error)
 }
 
 type StartInput struct {
@@ -22,13 +27,15 @@ type StartInput struct {
 }
 
 type StartUseCase struct {
-	repo   stream.Repository
-	engine stream.Engine
-	queue  Queue
+	repo        stream.Repository
+	engine      stream.Engine
+	queue       Queue
+	tracks      TrackFinder
+	storagePath string
 }
 
-func NewStartUseCase(repo stream.Repository, engine stream.Engine, queue Queue) *StartUseCase {
-	return &StartUseCase{repo: repo, engine: engine, queue: queue}
+func NewStartUseCase(repo stream.Repository, engine stream.Engine, queue Queue, tracks TrackFinder, storagePath string) *StartUseCase {
+	return &StartUseCase{repo: repo, engine: engine, queue: queue, tracks: tracks, storagePath: storagePath}
 }
 
 func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
@@ -44,6 +51,17 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 	}
 	if s.IsLive() {
 		return stream.ErrStreamAlreadyLive
+	}
+
+	if uc.tracks != nil {
+		if track, terr := uc.tracks.FindLatestByUploader(ctx, input.OwnerID); terr == nil && track != nil {
+			_ = uc.queue.Push(ctx, input.StreamID.String(), redis.TrackJob{
+				TrackID:  track.ID.String(),
+				FilePath: uc.storagePath + "/" + track.FilePath,
+				Title:    track.Title,
+				Artist:   track.Artist,
+			})
+		}
 	}
 
 	var audioFilePath string
@@ -62,7 +80,7 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 	} else {
 		observability.Logger.Info().
 			Str("stream_id", input.StreamID.String()).
-			Msg("no track in queue — stream started without audio file")
+			Msg("no track in queue")
 	}
 
 	err = uc.engine.Start(context.Background(), input.StreamID, audioFilePath)

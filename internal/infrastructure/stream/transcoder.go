@@ -3,18 +3,12 @@ package stream
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
-	"time"
+	"os/exec"
 )
 
-const (
-	// Taille d'un chunk audio ~2s à 128kbps = 32KB
-	chunkSize = 32 * 1024
-)
-
-// Transcoder lit un fichier audio depuis le filesystem local
-// et écrit les segments HLS dans le segmenter.
+// Transcoder invoque ffmpeg pour produire un VRAI flux HLS
+// (segments MPEG-TS valides + playlist.m3u8) à partir d'un fichier audio local.
+// Boucle en continu sur le fichier — comportement radio.
 type Transcoder struct {
 	segmenter *HLSSegmenter
 }
@@ -23,57 +17,40 @@ func NewTranscoder(segmenter *HLSSegmenter) *Transcoder {
 	return &Transcoder{segmenter: segmenter}
 }
 
-// TranscodeFile lit le fichier audio au chemin donné et génère les segments HLS.
-// Bloque jusqu'à la fin du fichier ou l'annulation du context.
+// TranscodeFile lance ffmpeg. ffmpeg écrit lui-même playlist.m3u8 et
+// segmentNNNNNN.ts dans le dossier du segmenter. Bloque jusqu'à
+// l'annulation du context (fin du direct).
 func (t *Transcoder) TranscodeFile(ctx context.Context, filePath string) error {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("opening audio file %q: %w", filePath, err)
-	}
-	defer func() { _ = f.Close() }()
+	dir := t.segmenter.dir
+	playlistPath := dir + "/playlist.m3u8"
+	segmentPattern := dir + "/segment%06d.ts"
 
-	buf := make([]byte, chunkSize)
+	// -re            : lecture au débit réel (comportement radio/live)
+	// -stream_loop -1: boucle le fichier à l'infini
+	// -c:a aac       : transcode en AAC, le codec standard pour HLS
+	// -f hls         : génère de VRAIS segments MPEG-TS + m3u8 valides
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-hide_banner", "-loglevel", "error",
+		"-re",
+		"-stream_loop", "-1",
+		"-i", filePath,
+		"-vn",
+		"-c:a", "aac",
+		"-b:a", "128k",
+		"-f", "hls",
+		"-hls_time", "2",
+		"-hls_list_size", "6",
+		"-hls_flags", "delete_segments+omit_endlist",
+		"-hls_segment_filename", segmentPattern,
+		playlistPath,
+	)
 
-	for {
-		// Vérifie l'annulation du context
-		select {
-		case <-ctx.Done():
+	if err := cmd.Run(); err != nil {
+		// Si le context a été annulé (Stop du direct), c'est un arrêt normal.
+		if ctx.Err() != nil {
 			return nil
-		default:
 		}
-
-		n, err := f.Read(buf)
-		if n > 0 {
-			// Écrit le chunk comme segment HLS
-			if writeErr := t.segmenter.WriteSegment(buf[:n]); writeErr != nil {
-				return fmt.Errorf("writing segment: %w", writeErr)
-			}
-		}
-
-		if err == io.EOF {
-			// Fin du fichier — on attend segmentDuration avant de recommencer
-			// (comportement radio : on boucle sur le fichier)
-			select {
-			case <-ctx.Done():
-				return nil
-			case <-time.After(segmentDuration):
-				// Seek au début pour boucler
-				if _, seekErr := f.Seek(0, io.SeekStart); seekErr != nil {
-					return fmt.Errorf("seeking to start: %w", seekErr)
-				}
-			}
-			continue
-		}
-
-		if err != nil {
-			return fmt.Errorf("reading audio file: %w", err)
-		}
-
-		// Simule la durée réelle du segment pour ne pas saturer
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(segmentDuration):
-		}
+		return fmt.Errorf("ffmpeg transcode failed: %w", err)
 	}
+	return nil
 }

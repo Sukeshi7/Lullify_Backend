@@ -83,6 +83,29 @@ func (r *TrackRepository) FindByPlaylist(ctx context.Context, playlistID uuid.UU
 	return list, rows.Err()
 }
 
+// FindLatestByUploader retourne la dernière track uploadée par un utilisateur,
+// ou (nil, nil) s'il n'en a aucune.
+func (r *TrackRepository) FindLatestByUploader(ctx context.Context, uploaderID uuid.UUID) (*playlist.Track, error) {
+	t := &playlist.Track{}
+	var format string
+	err := r.db.QueryRow(ctx, `
+		SELECT id, playlist_id, title, artist, file_path,
+		       format, size_bytes, duration, position,
+		       uploaded_by, created_at, updated_at
+		FROM tracks WHERE uploaded_by = $1
+		ORDER BY created_at DESC LIMIT 1
+	`, uploaderID).Scan(
+		&t.ID, &t.PlaylistID, &t.Title, &t.Artist, &t.FilePath,
+		&format, &t.SizeBytes, &t.Duration, &t.Position,
+		&t.UploadedBy, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	t.Format = playlist.Format(format)
+	return t, err
+}
+
 func (r *TrackRepository) Delete(ctx context.Context, id uuid.UUID) error {
 	_, err := r.db.Exec(ctx, `DELETE FROM tracks WHERE id = $1`, id)
 	return err

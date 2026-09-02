@@ -42,6 +42,7 @@ func TestRecord_Success(t *testing.T) {
 	}
 	if entry == nil {
 		t.Fatal("expected entry, got nil")
+		return
 	}
 	if entry.TrackTitle != "Chill Lofi" {
 		t.Errorf("expected title 'Chill Lofi', got %s", entry.TrackTitle)
