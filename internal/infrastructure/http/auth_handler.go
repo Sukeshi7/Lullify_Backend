@@ -35,9 +35,10 @@ func (h *AuthHandler) Routes(mux *http.ServeMux) {
 }
 
 type credentials struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username        string `json:"username"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	WantBroadcaster bool   `json:"want_broadcaster"`
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -46,8 +47,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
+
+	role := user.RoleUser
+	if c.WantBroadcaster {
+		role = user.RoleBroadcaster
+	}
+
 	u, err := h.register.Execute(r.Context(), appuser.RegisterInput{
-		Username: c.Username, Email: c.Email, Password: c.Password,
+		Username: c.Username,
+		Email:    c.Email,
+		Password: c.Password,
+		Role:     role,
 	})
 	if err != nil {
 		writeError(w, statusForError(err), err.Error())

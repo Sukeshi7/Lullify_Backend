@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	appstream "Lullify_Backend/internal/application/stream"
 	"Lullify_Backend/internal/domain/stream"
+	"Lullify_Backend/internal/domain/user"
 	infrastream "Lullify_Backend/internal/infrastructure/stream"
 	"Lullify_Backend/internal/infrastructure/token"
 
@@ -44,6 +46,7 @@ func NewStreamHandler(
 
 func (h *StreamHandler) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/streams", h.ListActive)
+	mux.HandleFunc("GET /api/v1/streams/mine", h.ListMine)
 	mux.HandleFunc("POST /api/v1/streams", h.Create)
 	mux.HandleFunc("POST /api/v1/streams/{id}/start", h.Start)
 	mux.HandleFunc("POST /api/v1/streams/{id}/stop", h.Stop)
@@ -57,46 +60,60 @@ func (h *StreamHandler) ListActive(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to fetch streams")
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"streams":  h.streamsToJSON(streams),
+		fieldTotal: len(streams),
+	})
+}
 
-	type streamResponse struct {
-		ID            string  `json:"id"`
-		Title         string  `json:"title"`
-		Description   string  `json:"description"`
-		MountPoint    string  `json:"mount_point"`
-		Status        string  `json:"status"`
-		ListenerCount int     `json:"listener_count"`
-		StartedAt     *string `json:"started_at,omitempty"`
+// ListMine retourne les streams de l'utilisateur connecté (pour restaurer l'état broadcaster)
+func (h *StreamHandler) ListMine(w http.ResponseWriter, r *http.Request) {
+	claims, ok := h.requireAuth(w, r)
+	if !ok {
+		return
 	}
 
-	result := make([]streamResponse, 0, len(streams))
-	for _, s := range streams {
-		var startedAt *string
-		if s.StartedAt != nil {
-			t := s.StartedAt.Format("2006-01-02T15:04:05Z")
-			startedAt = &t
+	all, err := h.repo.FindActive(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch streams")
+		return
+	}
+
+	mine := make([]*stream.Stream, 0)
+	for _, s := range all {
+		if s.OwnerID == claims.UserID {
+			mine = append(mine, s)
 		}
-		result = append(result, streamResponse{
-			ID:            s.ID.String(),
-			Title:         s.Title,
-			Description:   s.Description,
-			MountPoint:    s.MountPoint,
-			Status:        string(s.Status),
-			ListenerCount: s.ListenerCount,
-			StartedAt:     startedAt,
-		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"streams":  result,
-		fieldTotal: len(result),
+		"streams":  h.streamsToJSON(mine),
+		fieldTotal: len(mine),
 	})
 }
 
 func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
-	ownerID, err := h.ownerIDFromRequest(r)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	claims, ok := h.requireAuth(w, r)
+	if !ok {
 		return
+	}
+
+	if claims.Role != user.RoleBroadcaster && claims.Role != user.RoleAdmin {
+		writeError(w, http.StatusForbidden, "broadcaster role required")
+		return
+	}
+
+	// Vérifie qu'il n'a pas déjà un stream actif
+	all, err := h.repo.FindActive(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to check existing streams")
+		return
+	}
+	for _, s := range all {
+		if s.OwnerID == claims.UserID {
+			writeError(w, http.StatusConflict, "you already have an active stream")
+			return
+		}
 	}
 
 	var body struct {
@@ -104,14 +121,13 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description"`
 		MountPoint  string `json:"mount_point"`
 	}
-	// decodeErr pour éviter le shadow sur err ligne précédente
 	if decodeErr := json.NewDecoder(r.Body).Decode(&body); decodeErr != nil {
 		writeError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
 
 	s, err := h.create.Execute(r.Context(), appstream.CreateInput{
-		OwnerID:     ownerID,
+		OwnerID:     claims.UserID,
 		Title:       body.Title,
 		Description: body.Description,
 		MountPoint:  body.MountPoint,
@@ -133,9 +149,13 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StreamHandler) Start(w http.ResponseWriter, r *http.Request) {
-	ownerID, err := h.ownerIDFromRequest(r)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	claims, ok := h.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	if claims.Role != user.RoleBroadcaster && claims.Role != user.RoleAdmin {
+		writeError(w, http.StatusForbidden, "broadcaster role required")
 		return
 	}
 
@@ -147,7 +167,7 @@ func (h *StreamHandler) Start(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.start.Execute(r.Context(), appstream.StartInput{
 		StreamID: streamID,
-		OwnerID:  ownerID,
+		OwnerID:  claims.UserID,
 	}); err != nil {
 		writeError(w, statusForStreamError(err), err.Error())
 		return
@@ -157,9 +177,8 @@ func (h *StreamHandler) Start(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *StreamHandler) Stop(w http.ResponseWriter, r *http.Request) {
-	ownerID, err := h.ownerIDFromRequest(r)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+	claims, ok := h.requireAuth(w, r)
+	if !ok {
 		return
 	}
 
@@ -171,7 +190,7 @@ func (h *StreamHandler) Stop(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.stop.Execute(r.Context(), appstream.StopInput{
 		StreamID: streamID,
-		OwnerID:  ownerID,
+		OwnerID:  claims.UserID,
 	}); err != nil {
 		writeError(w, statusForStreamError(err), err.Error())
 		return
@@ -229,16 +248,38 @@ func (h *StreamHandler) HLSSegment(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *StreamHandler) ownerIDFromRequest(r *http.Request) (uuid.UUID, error) {
-	authHeader := r.Header.Get("Authorization")
-	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		return uuid.Nil, errors.New("missing token")
+// requireAuth extrait et valide le token Bearer, retourne les claims et true si OK.
+func (h *StreamHandler) requireAuth(w http.ResponseWriter, r *http.Request) (*token.Claims, bool) {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return nil, false
 	}
-	claims, err := h.tokens.ParseAccess(authHeader[7:])
+	claims, err := h.tokens.ParseAccess(strings.TrimPrefix(auth, "Bearer "))
 	if err != nil {
-		return uuid.Nil, err
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return nil, false
 	}
-	return claims.UserID, nil
+	return claims, true
+}
+
+func (h *StreamHandler) streamsToJSON(streams []*stream.Stream) []map[string]any {
+	result := make([]map[string]any, 0, len(streams))
+	for _, s := range streams {
+		entry := map[string]any{
+			"id":             s.ID.String(),
+			"title":          s.Title,
+			"description":    s.Description,
+			"mount_point":    s.MountPoint,
+			fieldStatus:      string(s.Status),
+			"listener_count": s.ListenerCount,
+		}
+		if s.StartedAt != nil {
+			entry["started_at"] = s.StartedAt.Format("2006-01-02T15:04:05Z")
+		}
+		result = append(result, entry)
+	}
+	return result
 }
 
 func statusForStreamError(err error) int {
