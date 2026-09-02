@@ -11,6 +11,11 @@ import (
 	"github.com/google/uuid"
 )
 
+// Queue est l'interface minimale pour dépiler les tracks.
+type Queue interface {
+	Pop(ctx context.Context, streamID string) (*redis.TrackJob, error)
+}
+
 type StartInput struct {
 	StreamID uuid.UUID
 	OwnerID  uuid.UUID
@@ -19,10 +24,10 @@ type StartInput struct {
 type StartUseCase struct {
 	repo   stream.Repository
 	engine stream.Engine
-	queue  *redis.Client
+	queue  Queue
 }
 
-func NewStartUseCase(repo stream.Repository, engine stream.Engine, queue *redis.Client) *StartUseCase {
+func NewStartUseCase(repo stream.Repository, engine stream.Engine, queue Queue) *StartUseCase {
 	return &StartUseCase{repo: repo, engine: engine, queue: queue}
 }
 
@@ -41,7 +46,6 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 		return stream.ErrStreamAlreadyLive
 	}
 
-	// Pop la track AVANT de démarrer — zéro race condition
 	var audioFilePath string
 	job, popErr := uc.queue.Pop(ctx, input.StreamID.String())
 	if popErr != nil {
