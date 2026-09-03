@@ -47,8 +47,6 @@ func NewStreamEngine(queue *redis.Client) *Engine {
 	}
 }
 
-// Start démarre un stream. audioFilePath est la première track — les suivantes
-// sont récupérées depuis Redis via la queue avant le démarrage.
 func (e *Engine) Start(ctx context.Context, streamID uuid.UUID, audioFilePath string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -64,7 +62,6 @@ func (e *Engine) Start(ctx context.Context, streamID uuid.UUID, audioFilePath st
 
 	sessionCtx, cancel := context.WithCancel(ctx)
 
-	// Collecte toutes les tracks depuis Redis avant de démarrer
 	audioFiles := []string{}
 	if audioFilePath != "" {
 		audioFiles = append(audioFiles, audioFilePath)
