@@ -15,11 +15,11 @@ import (
 const listenerBufferSize = 8
 
 type streamSession struct {
-	cancel        context.CancelFunc
-	segmenter     *HLSSegmenter
-	audioFilePath string
-	subscribers   map[<-chan domain.Chunk]chan domain.Chunk
-	mu            sync.RWMutex
+	cancel      context.CancelFunc
+	segmenter   *HLSSegmenter
+	audioFiles  []string
+	subscribers map[<-chan domain.Chunk]chan domain.Chunk
+	mu          sync.RWMutex
 }
 
 //nolint:unused
@@ -47,6 +47,8 @@ func NewStreamEngine(queue *redis.Client) *Engine {
 	}
 }
 
+// Start démarre un stream. audioFilePath est la première track — les suivantes
+// sont récupérées depuis Redis via la queue avant le démarrage.
 func (e *Engine) Start(ctx context.Context, streamID uuid.UUID, audioFilePath string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -62,11 +64,27 @@ func (e *Engine) Start(ctx context.Context, streamID uuid.UUID, audioFilePath st
 
 	sessionCtx, cancel := context.WithCancel(ctx)
 
+	// Collecte toutes les tracks depuis Redis avant de démarrer
+	audioFiles := []string{}
+	if audioFilePath != "" {
+		audioFiles = append(audioFiles, audioFilePath)
+	}
+
+	if e.queue != nil {
+		for {
+			job, err := e.queue.Pop(sessionCtx, streamID.String())
+			if err != nil || job == nil || job.FilePath == "" {
+				break
+			}
+			audioFiles = append(audioFiles, job.FilePath)
+		}
+	}
+
 	session := &streamSession{
-		cancel:        cancel,
-		segmenter:     segmenter,
-		audioFilePath: audioFilePath,
-		subscribers:   make(map[<-chan domain.Chunk]chan domain.Chunk),
+		cancel:      cancel,
+		segmenter:   segmenter,
+		audioFiles:  audioFiles,
+		subscribers: make(map[<-chan domain.Chunk]chan domain.Chunk),
 	}
 
 	e.sessions[streamID] = session
@@ -99,54 +117,23 @@ func (e *Engine) produce(ctx context.Context, streamID uuid.UUID, session *strea
 		e.mu.Unlock()
 	}()
 
-	if session.audioFilePath == "" {
+	if len(session.audioFiles) == 0 {
 		<-ctx.Done()
 		return
 	}
 
-	currentFile := session.audioFilePath
+	observability.Logger.Info().
+		Str("stream_id", streamID.String()).
+		Int("tracks", len(session.audioFiles)).
+		Msg("starting transcoder with playlist")
+
 	transcoder := NewTranscoder(session.segmenter)
-
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-
-		observability.Logger.Info().
+	if err := transcoder.TranscodeFiles(ctx, session.audioFiles); err != nil {
+		log := observability.FromContext(ctx)
+		log.Error().
+			Err(err).
 			Str("stream_id", streamID.String()).
-			Str("file", currentFile).
-			Msg("transcoding track")
-
-		if err := transcoder.TranscodeFile(ctx, currentFile); err != nil {
-			log := observability.FromContext(ctx)
-			log.Error().
-				Err(err).
-				Str("stream_id", streamID.String()).
-				Msg("transcoder error")
-			return
-		}
-
-		if ctx.Err() != nil {
-			return
-		}
-
-		// Pop la track suivante dans Redis
-		if e.queue != nil {
-			job, err := e.queue.Pop(ctx, streamID.String())
-			if err == nil && job != nil && job.FilePath != "" {
-				currentFile = job.FilePath
-				observability.Logger.Info().
-					Str("stream_id", streamID.String()).
-					Str("next_file", currentFile).
-					Msg("switching to next track")
-				continue
-			}
-		}
-
-		// Queue vide — reboucle sur le même fichier
-		observability.Logger.Info().
-			Str("stream_id", streamID.String()).
-			Msg("queue empty, looping current track")
+			Msg("transcoder error")
 	}
 }
 
