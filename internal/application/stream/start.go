@@ -54,59 +54,29 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 		return stream.ErrStreamAlreadyLive
 	}
 
-	var audioFilePath string
-
 	if uc.tracks != nil {
-		// Trouve la dernière track uploadée pour récupérer la playlist
 		latestTrack, terr := uc.tracks.FindLatestByUploader(ctx, input.OwnerID)
 		if terr == nil && latestTrack != nil {
-			// Récupère toutes les tracks de cette playlist
 			allTracks, perr := uc.tracks.FindByPlaylist(ctx, latestTrack.PlaylistID)
 			if perr == nil && len(allTracks) > 0 {
-				// Première track — passée directement à l'engine
-				audioFilePath = uc.storagePath + "/" + allTracks[0].FilePath
-
-				// Reste des tracks — pushées dans Redis
-				for i := 1; i < len(allTracks); i++ {
+				for _, track := range allTracks {
 					_ = uc.queue.Push(ctx, input.StreamID.String(), redis.TrackJob{
-						TrackID:  allTracks[i].ID.String(),
-						FilePath: uc.storagePath + "/" + allTracks[i].FilePath,
-						Title:    allTracks[i].Title,
-						Artist:   allTracks[i].Artist,
+						TrackID:  track.ID.String(),
+						FilePath: uc.storagePath + "/" + track.FilePath,
+						Title:    track.Title,
+						Artist:   track.Artist,
 					})
 				}
 
 				observability.Logger.Info().
 					Str("stream_id", input.StreamID.String()).
-					Int("tracks_queued", len(allTracks)-1).
-					Str("first_file", audioFilePath).
+					Int("tracks_queued", len(allTracks)).
 					Msg("playlist loaded into queue")
 			}
 		}
 	}
 
-	if audioFilePath == "" {
-		// Fallback — pop depuis Redis si déjà quelque chose dedans
-		job, popErr := uc.queue.Pop(ctx, input.StreamID.String())
-		if popErr != nil {
-			observability.Logger.Warn().
-				Err(popErr).
-				Str("stream_id", input.StreamID.String()).
-				Msg("failed to pop track from queue")
-		} else if job != nil {
-			audioFilePath = job.FilePath
-			observability.Logger.Info().
-				Str("stream_id", input.StreamID.String()).
-				Str("file", job.FilePath).
-				Msg("audio file popped from queue")
-		} else {
-			observability.Logger.Info().
-				Str("stream_id", input.StreamID.String()).
-				Msg("no track in queue — stream started without audio")
-		}
-	}
-
-	err = uc.engine.Start(context.Background(), input.StreamID, audioFilePath)
+	err = uc.engine.Start(context.Background(), input.StreamID, "")
 	if err != nil {
 		return fmt.Errorf("starting engine: %w", err)
 	}
