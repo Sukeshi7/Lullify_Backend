@@ -32,7 +32,6 @@ func (t *Transcoder) TranscodeFile(ctx context.Context, filePath string) error {
 	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "error",
 		"-re",
-		"-stream_loop", "-1",
 		"-i", filePath,
 		"-vn",
 		"-c:a", "aac",
