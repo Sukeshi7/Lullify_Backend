@@ -1,6 +1,7 @@
 package stream
 
 import (
+	"Lullify_Backend/internal/infrastructure/observability"
 	"context"
 	"fmt"
 	"os"
@@ -87,6 +88,10 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 		playlistPath,
 	)
 	consumer.Stdin = pipeR
+
+	observability.Logger.Info().
+		Strs("producer_args", producerArgs).
+		Msg("ffmpeg producer command")
 
 	if err := producer.Start(); err != nil {
 		if ctx.Err() != nil {
