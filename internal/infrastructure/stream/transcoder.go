@@ -25,7 +25,6 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 		return nil
 	}
 
-	// Vérifie si le contexte est déjà annulé avant de lancer ffmpeg
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -38,10 +37,9 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 	if err != nil {
 		return fmt.Errorf("creating pipe: %w", err)
 	}
-	defer pipeR.Close()
-	defer pipeW.Close()
+	defer func() { _ = pipeR.Close() }()
+	defer func() { _ = pipeW.Close() }()
 
-	// ── Producteur : lit les fichiers en boucle et sort du PCM brut ──
 	producerArgs := []string{
 		"-hide_banner", "-loglevel", "error",
 		"-re",
@@ -73,7 +71,6 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 	producer := exec.CommandContext(ctx, "ffmpeg", producerArgs...)
 	producer.Stdout = pipeW
 
-	// ── Consommateur : lit le PCM et génère le HLS ──
 	consumer := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "error",
 		"-f", "s16le",
@@ -98,7 +95,7 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 		return fmt.Errorf("starting producer: %w", err)
 	}
 	if err := consumer.Start(); err != nil {
-		producer.Process.Kill() //nolint:errcheck
+		_ = producer.Process.Kill()
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -107,12 +104,12 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 
 	go func() {
 		<-ctx.Done()
-		producer.Process.Kill() //nolint:errcheck
-		pipeW.Close()
+		_ = producer.Process.Kill()
+		_ = pipeW.Close()
 	}()
 
 	producerErr := producer.Wait()
-	pipeW.Close()
+	_ = pipeW.Close()
 	consumerErr := consumer.Wait()
 
 	if ctx.Err() != nil {

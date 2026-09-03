@@ -59,7 +59,6 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 		if terr == nil && latestTrack != nil {
 			allTracks, perr := uc.tracks.FindByPlaylist(ctx, latestTrack.PlaylistID)
 			if perr == nil && len(allTracks) > 0 {
-				// Push toutes les tracks dans Redis — l'engine les collectera toutes
 				for _, track := range allTracks {
 					_ = uc.queue.Push(ctx, input.StreamID.String(), redis.TrackJob{
 						TrackID:  track.ID.String(),
@@ -77,7 +76,6 @@ func (uc *StartUseCase) Execute(ctx context.Context, input StartInput) error {
 		}
 	}
 
-	// L'engine collecte lui-même toutes les tracks depuis Redis
 	err = uc.engine.Start(context.Background(), input.StreamID, "")
 	if err != nil {
 		return fmt.Errorf("starting engine: %w", err)
