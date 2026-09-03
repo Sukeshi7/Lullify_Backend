@@ -11,7 +11,7 @@ import (
 )
 
 func TestEngine_StartAndStop(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	streamID := uuid.New()
 	ctx := context.Background()
 
@@ -31,7 +31,7 @@ func TestEngine_StartAndStop(t *testing.T) {
 }
 
 func TestEngine_StartAlreadyLive(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	streamID := uuid.New()
 	ctx := context.Background()
 
@@ -47,7 +47,7 @@ func TestEngine_StartAlreadyLive(t *testing.T) {
 }
 
 func TestEngine_StopNotLive(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	err := engine.Stop(uuid.New())
 	if err != domain.ErrStreamNotLive {
 		t.Fatalf("expected ErrStreamNotLive, got %v", err)
@@ -55,7 +55,7 @@ func TestEngine_StopNotLive(t *testing.T) {
 }
 
 func TestEngine_ContextCancellation(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	streamID := uuid.New()
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -75,7 +75,7 @@ func TestEngine_ContextCancellation(t *testing.T) {
 }
 
 func TestEngine_SubscribeUnsubscribe(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	streamID := uuid.New()
 	ctx := context.Background()
 
@@ -96,7 +96,7 @@ func TestEngine_SubscribeUnsubscribe(t *testing.T) {
 }
 
 func TestEngine_SubscribeToNonExistentStream(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	_, err := engine.Subscribe(uuid.New())
 	if err == nil {
 		t.Fatal("expected error when subscribing to non-existent stream, got nil")
@@ -104,7 +104,7 @@ func TestEngine_SubscribeToNonExistentStream(t *testing.T) {
 }
 
 func TestEngine_GetSegmenter_Running(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	streamID := uuid.New()
 
 	if err := engine.Start(context.Background(), streamID, ""); err != nil {
@@ -122,7 +122,7 @@ func TestEngine_GetSegmenter_Running(t *testing.T) {
 }
 
 func TestEngine_GetSegmenter_NotRunning(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	_, err := engine.GetSegmenter(uuid.New())
 	if err == nil {
 		t.Fatal("expected error for non-running stream")
@@ -130,7 +130,7 @@ func TestEngine_GetSegmenter_NotRunning(t *testing.T) {
 }
 
 func TestEngine_MultipleStreams(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	ids := []uuid.UUID{uuid.New(), uuid.New(), uuid.New()}
 
 	for _, id := range ids {
@@ -161,7 +161,7 @@ func TestEngine_MultipleStreams(t *testing.T) {
 }
 
 func TestEngine_SubscribeAfterStop(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	streamID := uuid.New()
 
 	if err := engine.Start(context.Background(), streamID, ""); err != nil {
@@ -180,13 +180,13 @@ func TestEngine_SubscribeAfterStop(t *testing.T) {
 }
 
 func TestEngine_UnsubscribeNonExistentStream(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	ch := make(<-chan domain.Chunk)
 	engine.Unsubscribe(uuid.New(), ch)
 }
 
 func TestEngine_StartWithAudioFile_NonExistent(t *testing.T) {
-	engine := NewStreamEngine()
+	engine := NewStreamEngine(nil)
 	streamID := uuid.New()
 
 	if err := engine.Start(context.Background(), streamID, "/nonexistent/file.mp3"); err != nil {

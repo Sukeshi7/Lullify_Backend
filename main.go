@@ -77,7 +77,7 @@ func main() {
 
 	// ── Services ───────────────────────────────────────
 	jwtService := token.NewJWTService(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.JWTAccessExpiry, cfg.JWTRefreshExpiry)
-	streamEngine := infrastream.NewStreamEngine()
+	streamEngine := infrastream.NewStreamEngine(redisClient)
 	rateLimiter := httphandler.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
 
 	// ── Use cases ──────────────────────────────────────

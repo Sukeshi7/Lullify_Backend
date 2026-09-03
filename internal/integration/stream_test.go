@@ -22,7 +22,7 @@ func TestStreamFlow_CreateAndStart(t *testing.T) {
 	userRepo := postgres.NewUserRepository(testDB)
 	streamRepo := postgres.NewStreamRepository(testDB)
 	trackRepo := postgres.NewTrackRepository(testDB)
-	engine := infrastream.NewStreamEngine()
+	engine := infrastream.NewStreamEngine(testRedis)
 
 	registerUC := appuser.NewRegisterUseCase(userRepo)
 	createStreamUC := appstream.NewCreateUseCase(streamRepo)
