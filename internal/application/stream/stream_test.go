@@ -82,6 +82,10 @@ func (m *mockTrackFinder) FindLatestByUploader(ctx context.Context, uploaderID u
 	return m.find(ctx, uploaderID)
 }
 
+func (m *mockTrackFinder) FindByPlaylist(ctx context.Context, playlistID uuid.UUID) ([]*playlist.Track, error) {
+	return nil, nil
+}
+
 // noTracks renvoie un TrackFinder qui ne trouve jamais de track (cas par défaut).
 func noTracks() appstream.TrackFinder {
 	return &mockTrackFinder{}
