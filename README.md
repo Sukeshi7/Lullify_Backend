@@ -6,7 +6,7 @@
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Production API**: https://lullifybackend-dev.up.railway.app  
+**Production API**: https://lullify.up.railway.app  
 **Grafana Dashboard**: https://epickayak2184.grafana.net  
 **OpenAPI Spec**: [`docs/openapi.yaml`](docs/openapi.yaml)
 
