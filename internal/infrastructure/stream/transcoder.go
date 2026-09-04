@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-
-	"Lullify_Backend/internal/infrastructure/observability"
 )
 
 type Transcoder struct {
@@ -40,39 +38,54 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 		return fmt.Errorf("creating pipe: %w", err)
 	}
 	defer func() { _ = pipeR.Close() }()
-	defer func() { _ = pipeW.Close() }()
 
-	producerArgs := []string{
+	// ── Args producteur ──────────────────────────────────────────────────────
+	baseArgs := []string{
 		"-hide_banner", "-loglevel", "error",
 		"-re",
 	}
 
 	for _, fp := range filePaths {
-		producerArgs = append(producerArgs, "-i", fp)
+		baseArgs = append(baseArgs, "-i", fp)
 	}
 
 	if len(filePaths) > 1 {
 		filterComplex := fmt.Sprintf("%s concat=n=%d:v=0:a=1[aout]",
 			buildInputLabels(len(filePaths)),
 			len(filePaths))
-		producerArgs = append(producerArgs,
+		baseArgs = append(baseArgs,
 			"-filter_complex", filterComplex,
 			"-map", "[aout]",
 		)
 	}
 
-	producerArgs = append(producerArgs,
+	baseArgs = append(baseArgs,
 		"-vn",
 		"-f", "s16le",
 		"-ar", "44100",
 		"-ac", "2",
-		"-stream_loop", "-1",
 		"pipe:1",
 	)
 
-	producer := exec.CommandContext(ctx, "ffmpeg", producerArgs...)
-	producer.Stdout = pipeW
+	// ── Producteur en boucle ─────────────────────────────────────────────────
+	go func() {
+		defer func() { _ = pipeW.Close() }()
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			cmd := exec.CommandContext(ctx, "ffmpeg", baseArgs...)
+			cmd.Stdout = pipeW
+			if err := cmd.Run(); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
+				// Erreur ffmpeg — on continue à boucler
+			}
+		}
+	}()
 
+	// ── Consommateur : PCM → HLS ─────────────────────────────────────────────
 	consumer := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "error",
 		"-f", "s16le",
@@ -90,18 +103,7 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 	)
 	consumer.Stdin = pipeR
 
-	observability.Logger.Info().
-		Strs("producer_args", producerArgs).
-		Msg("ffmpeg producer command")
-
-	if err := producer.Start(); err != nil {
-		if ctx.Err() != nil {
-			return nil
-		}
-		return fmt.Errorf("starting producer: %w", err)
-	}
 	if err := consumer.Start(); err != nil {
-		_ = producer.Process.Kill()
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -110,23 +112,14 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 
 	go func() {
 		<-ctx.Done()
-		_ = producer.Process.Kill()
-		_ = pipeW.Close()
+		_ = consumer.Process.Kill()
 	}()
 
-	producerErr := producer.Wait()
-	_ = pipeW.Close()
-	consumerErr := consumer.Wait()
-
-	if ctx.Err() != nil {
-		return nil
-	}
-
-	if producerErr != nil {
-		return fmt.Errorf("producer error: %w", producerErr)
-	}
-	if consumerErr != nil {
-		return fmt.Errorf("consumer error: %w", consumerErr)
+	if err := consumer.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("consumer error: %w", err)
 	}
 
 	return nil
