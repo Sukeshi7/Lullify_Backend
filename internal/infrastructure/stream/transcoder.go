@@ -67,11 +67,3 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 
 	return nil
 }
-
-func buildInputLabels(n int) string {
-	result := ""
-	for i := 0; i < n; i++ {
-		result += fmt.Sprintf("[%d:a]", i)
-	}
-	return result
-}
