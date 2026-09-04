@@ -30,96 +30,39 @@ func (t *Transcoder) TranscodeFiles(ctx context.Context, filePaths []string) err
 	}
 
 	dir := t.segmenter.dir
-	playlistPath := dir + "/playlist.m3u8"
-	segmentPattern := dir + "/segment%06d.ts"
 
-	pipeR, pipeW, err := os.Pipe()
-	if err != nil {
-		return fmt.Errorf("creating pipe: %w", err)
+	listFile := dir + "/playlist_input.txt"
+	content := ""
+	for _, f := range filePaths {
+		content += "file '" + f + "'\n"
 	}
-	defer func() { _ = pipeR.Close() }()
+	if err := os.WriteFile(listFile, []byte(content), 0644); err != nil {
+		return fmt.Errorf("writing concat list: %w", err)
+	}
 
-	// ── Args producteur ──────────────────────────────────────────────────────
-	baseArgs := []string{
+	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-hide_banner", "-loglevel", "error",
 		"-re",
-	}
-
-	for _, fp := range filePaths {
-		baseArgs = append(baseArgs, "-i", fp)
-	}
-
-	if len(filePaths) > 1 {
-		filterComplex := fmt.Sprintf("%s concat=n=%d:v=0:a=1[aout]",
-			buildInputLabels(len(filePaths)),
-			len(filePaths))
-		baseArgs = append(baseArgs,
-			"-filter_complex", filterComplex,
-			"-map", "[aout]",
-		)
-	}
-
-	baseArgs = append(baseArgs,
+		"-f", "concat",
+		"-safe", "0",
+		"-stream_loop", "-1",
+		"-i", listFile,
 		"-vn",
-		"-f", "s16le",
-		"-ar", "44100",
-		"-ac", "2",
-		"pipe:1",
-	)
-
-	// ── Producteur en boucle ─────────────────────────────────────────────────
-	go func() {
-		defer func() { _ = pipeW.Close() }()
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			cmd := exec.CommandContext(ctx, "ffmpeg", baseArgs...)
-			cmd.Stdout = pipeW
-			if err := cmd.Run(); err != nil {
-				if ctx.Err() != nil {
-					return
-				}
-				// Erreur ffmpeg — on continue à boucler
-			}
-		}
-	}()
-
-	// ── Consommateur : PCM → HLS ─────────────────────────────────────────────
-	consumer := exec.CommandContext(ctx, "ffmpeg",
-		"-hide_banner", "-loglevel", "error",
-		"-f", "s16le",
-		"-ar", "44100",
-		"-ac", "2",
-		"-i", "pipe:0",
 		"-c:a", "aac",
 		"-b:a", "128k",
 		"-f", "hls",
 		"-hls_time", "2",
 		"-hls_list_size", "6",
 		"-hls_flags", "delete_segments+omit_endlist",
-		"-hls_segment_filename", segmentPattern,
-		playlistPath,
+		"-hls_segment_filename", dir+"/segment%06d.ts",
+		dir+"/playlist.m3u8",
 	)
-	consumer.Stdin = pipeR
 
-	if err := consumer.Start(); err != nil {
+	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {
 			return nil
 		}
-		return fmt.Errorf("starting consumer: %w", err)
-	}
-
-	go func() {
-		<-ctx.Done()
-		_ = consumer.Process.Kill()
-	}()
-
-	if err := consumer.Wait(); err != nil {
-		if ctx.Err() != nil {
-			return nil
-		}
-		return fmt.Errorf("consumer error: %w", err)
+		return fmt.Errorf("ffmpeg transcode failed: %w", err)
 	}
 
 	return nil
